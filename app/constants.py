@@ -1,0 +1,25 @@
+# Legacy compatibility - import from new location
+from app.core.config import TTSConfig
+
+# Re-export for backward compatibility
+DEFAULT_VOICE = TTSConfig.DEFAULT_VOICE
+DEFAULT_RATE = TTSConfig.DEFAULT_RATE
+DEFAULT_PITCH = TTSConfig.DEFAULT_PITCH
+DEFAULT_MAXLEN = TTSConfig.DEFAULT_MAXLEN
+DEFAULT_GAP_MS = TTSConfig.DEFAULT_GAP_MS
+DEFAULT_WORKERS_CHUNK = TTSConfig.DEFAULT_WORKERS_CHUNK
+DEFAULT_WORKERS_FILE = TTSConfig.DEFAULT_WORKERS_FILE
+DEFAULT_WORKERS_PLAYER = TTSConfig.DEFAULT_WORKERS_PLAYER
+
+VOICE_CHOICES = TTSConfig.VOICE_CHOICES
+RATE_CHOICES = TTSConfig.RATE_CHOICES
+PITCH_CHOICES = TTSConfig.PITCH_CHOICES
+
+# File and path constants
+TEMP_PREFIX = TTSConfig.TEMP_PREFIX
+
+# Import paths from AppConfig
+from app.core.config import AppConfig
+APP_DIR = AppConfig.APP_DIR
+OUTPUT_DIR = AppConfig.OUTPUT_DIR
+LOG_PATH = AppConfig.LOG_PATH

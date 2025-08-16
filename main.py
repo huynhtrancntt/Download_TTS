@@ -68,6 +68,8 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(0)  # Giảm khoảng cách giữa các widget
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin
 
         # Menu and status bar FIRST - so tabs can access status bar
         self._setup_menu_and_status()

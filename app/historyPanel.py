@@ -1,4 +1,4 @@
-from this import s
+# Import dependencies
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
                                QLabel, QScrollArea, QListWidget, QListWidgetItem
                                )
@@ -38,40 +38,41 @@ class HistoryPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin để thiết kế lại
         layout.setSpacing(0)
         
-        # Background và viền phân biệt
-        self.setStyleSheet("""
-            QWidget#HistoryPanel {
-                background-color: #0f172b;
+        # Background và viền phân biệt - use new styling
+        from app.ui.styles import AppStyles
+        self.setStyleSheet(f"""
+            QWidget#HistoryPanel {{
+                background-color: {AppStyles.COLORS['background']};
                 border-radius: 8px;
-                border: 1px solid #334155;
-            }
+                border: 1px solid {AppStyles.COLORS['border']};
+            }}
         """)
         # Header nhỏ gọn
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(12, 8, 12, 6)
         
         self.title = QLabel(title_text)
-        self.title.setStyleSheet("""
-            color: #f1f5f9; 
+        self.title.setStyleSheet(f"""
+            color: {AppStyles.COLORS['text_primary']}; 
             font-weight: 600; 
             font-size: 14px;
         """)
 
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(24, 24)
-        close_btn.setStyleSheet("""
-            QPushButton {
-                color: #94a3b8;
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {AppStyles.COLORS['text_secondary']};
                 background: transparent;
                 border: none;
                 font-size: 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
-                color: #f1f5f9;
-                background: #334155;
+            }}
+            QPushButton:hover {{
+                color: {AppStyles.COLORS['text_primary']};
+                background: {AppStyles.COLORS['border']};
                 border-radius: 12px;
-            }
+            }}
         """)
         close_btn.clicked.connect(self.close_panel)
 
@@ -83,7 +84,7 @@ class HistoryPanel(QWidget):
         # Thêm đường viền phân biệt
         separator = QWidget()
         separator.setFixedHeight(1)
-        separator.setStyleSheet("background-color: #334155;")
+        separator.setStyleSheet(f"background-color: {AppStyles.COLORS['border']};")
         layout.addWidget(separator)
 
         # QListWidget nhỏ gọn

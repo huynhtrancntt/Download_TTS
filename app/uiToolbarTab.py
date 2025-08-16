@@ -19,7 +19,6 @@ class UIToolbarTab(QWidget):
         root_layout = QVBoxLayout(self)
         self.toolbar = QHBoxLayout()
         root_layout.addLayout(self.toolbar)
-        root_layout.addStretch()
 
     def enable_history(self, hist_title: str, item_factory: Callable,
                        on_item_selected: Optional[Callable] = None) -> HistoryFeature:
