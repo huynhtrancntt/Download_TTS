@@ -4,7 +4,6 @@
 Phiên bản tối ưu với comment tiếng Việt và cấu trúc code rõ ràng
 """
 
-from pickle import FALSE
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
     QLabel, QProgressBar, QMainWindow, QTabWidget, QStatusBar, 

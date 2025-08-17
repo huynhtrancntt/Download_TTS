@@ -16,7 +16,8 @@ from pydub import AudioSegment
 
 from app.appConfig import AppConfig
 from app.utils.helps import split_text, tts_sync_save, save_log_entry
-from app.utils.audio_helpers import get_mp3_duration_ms, hide_directory_on_windows
+from app.utils.audio_helpers import get_mp3_duration_ms
+from app.utils.helps import hide_directory_on_windows
 
 # ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 

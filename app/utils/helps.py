@@ -86,41 +86,6 @@ def split_text(text: str, max_len: int = None) -> List[str]:
     return ideas
 
 
-# def split_text(text: str, max_len: int = 220) -> List[str]:
-#     sentences = re.split(r'(?<=[.!?…])\s+', text.strip())
-#     chunks, cur = [], ""
-
-#     def flush():
-#         nonlocal cur
-#         if cur.strip():
-#             chunks.append(cur.strip())
-#         cur = ""
-#     for s in sentences:
-#         s = s.strip()
-#         if not s:
-#             continue
-#         if len(s) > max_len:
-#             parts = re.split(r'([,;:])', s)
-#             buff = ""
-#             for p in parts:
-#                 cand = (buff + p) if buff else p
-#                 if len(cand) <= max_len:
-#                     buff = cand
-#                 else:
-#                     if buff.strip():
-#                         chunks.append(buff.strip())
-#                     buff = p.strip()
-#             if buff.strip():
-#                 chunks.append(buff.strip())
-#             continue
-#         if len(cur) + len(s) + (1 if cur else 0) <= max_len:
-#             cur = (cur + " " + s).strip() if cur else s
-#         else:
-#             flush()
-#             cur = s
-#     flush()
-#     return chunks
-
 # ---------- Edge TTS ----------
 
 
@@ -145,14 +110,30 @@ def tts_sync_save(text, out_path, voice, rate_percent, pitch_hz):
 
 
 def clean_all_temp_parts():
+    """
+    Xóa tất cả các thư mục tạm thời của ứng dụng
+
+    Returns:
+        int: Số lượng thư mục đã xóa thành công
+    """
+    cleaned_count = 0
     tmpdir = tempfile.gettempdir()
-    for name in os.listdir(tmpdir):
-        p = os.path.join(tmpdir, name)
-        if os.path.isdir(p) and name.startswith(TTSConfig.TEMP_PREFIX):
-            try:
-                shutil.rmtree(p, ignore_errors=True)
-            except Exception:
-                pass
+
+    try:
+        for name in os.listdir(tmpdir):
+            p = os.path.join(tmpdir, name)
+            if os.path.isdir(p) and name.startswith(TTSConfig.TEMP_PREFIX):
+                try:
+                    shutil.rmtree(p, ignore_errors=True)
+                    cleaned_count += 1
+                    print(f"Đã xóa thư mục tạm: {name}")
+                except Exception as e:
+                    print(f"Lỗi khi xóa thư mục {name}: {e}")
+    except Exception as e:
+        print(f"Lỗi khi quét thư mục tạm: {e}")
+
+    print(f"Đã xóa {cleaned_count} thư mục tạm thời")
+    return cleaned_count
 
 
 def timestamp_str():
@@ -160,18 +141,185 @@ def timestamp_str():
 
 
 def save_log_entry(entry: dict):
+    """
+    Lưu một entry log vào file JSON
+
+    Args:
+        entry (dict): Dữ liệu log cần lưu
+
+    Returns:
+        bool: True nếu lưu thành công, False nếu thất bại
+    """
     try:
+        # Đảm bảo entry là dict
+        if not isinstance(entry, dict):
+            print("Lỗi: entry phải là dictionary")
+            return False
+
         data = []
+
+        # Đọc dữ liệu cũ nếu file tồn tại
         if TTSConfig.LOG_PATH.exists():
-            with open(TTSConfig.LOG_PATH, "r", encoding="utf-8") as f:
-                try:
+            try:
+                with open(TTSConfig.LOG_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if not isinstance(data, list):
                         data = []
-                except Exception:
-                    data = []
+            except json.JSONDecodeError:
+                print("Lỗi: File log bị hỏng, tạo mới")
+                data = []
+            except Exception as e:
+                print(f"Lỗi khi đọc file log: {e}")
+                data = []
+
+        # Thêm entry mới
+        entry['timestamp'] = datetime.now().isoformat()
         data.append(entry)
+
+        # Lưu vào file
         with open(TTSConfig.LOG_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return True
+
     except Exception as e:
-        print("Log write error:", e)
+        print(f"Lỗi khi lưu log: {e}")
+        return False
+
+
+def hide_directory_on_windows(directory_path):
+    """
+    Ẩn thư mục trên Windows bằng lệnh attrib +h
+
+    Args:
+        directory_path (str): Đường dẫn đến thư mục cần ẩn
+
+    Returns:
+        bool: True nếu thành công, False nếu thất bại
+
+    Raises:
+        OSError: Nếu không phải hệ điều hành Windows
+    """
+    import platform
+    import subprocess
+
+    # Kiểm tra hệ điều hành
+    if platform.system() != 'Windows':
+        raise OSError("Hàm này chỉ hoạt động trên Windows")
+
+    try:
+        # Kiểm tra thư mục có tồn tại không
+        if not os.path.exists(directory_path):
+            print(f"Thư mục không tồn tại: {directory_path}")
+            return False
+
+        # Thực hiện lệnh ẩn thư mục
+        result = subprocess.run(
+            ['attrib', '+h', directory_path],
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            print(f"Đã ẩn thư mục thành công: {directory_path}")
+            return True
+        else:
+            print(f"Lỗi khi ẩn thư mục: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"Lỗi khi ẩn thư mục: {e}")
+        return False
+
+
+def show_directory_on_windows(directory_path):
+    """
+    Hiện thư mục đã ẩn trên Windows bằng lệnh attrib -h
+
+    Args:
+        directory_path (str): Đường dẫn đến thư mục cần hiện
+
+    Returns:
+        bool: True nếu thành công, False nếu thất bại
+
+    Raises:
+        OSError: Nếu không phải hệ điều hành Windows
+    """
+    import platform
+    import subprocess
+
+    # Kiểm tra hệ điều hành
+    if platform.system() != 'Windows':
+        raise OSError("Hàm này chỉ hoạt động trên Windows")
+
+    try:
+        # Kiểm tra thư mục có tồn tại không
+        if not os.path.exists(directory_path):
+            print(f"Thư mục không tồn tại: {directory_path}")
+            return False
+
+        # Thực hiện lệnh hiện thư mục
+        result = subprocess.run(
+            ['attrib', '-h', directory_path],
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            print(f"Đã hiện thư mục thành công: {directory_path}")
+            return True
+        else:
+            print(f"Lỗi khi hiện thư mục: {result.stderr}")
+            return False
+
+    except Exception as e:
+        print(f"Lỗi khi hiện thư mục: {e}")
+        return False
+
+
+def is_directory_hidden(directory_path):
+    """
+    Kiểm tra trạng thái ẩn của thư mục trên Windows
+
+    Args:
+        directory_path (str): Đường dẫn đến thư mục cần kiểm tra
+
+    Returns:
+        bool: True nếu thư mục bị ẩn, False nếu không
+
+    Raises:
+        OSError: Nếu không phải hệ điều hành Windows
+    """
+    import platform
+    import subprocess
+
+    # Kiểm tra hệ điều hành
+    if platform.system() != 'Windows':
+        raise OSError("Hàm này chỉ hoạt động trên Windows")
+
+    try:
+        # Kiểm tra thư mục có tồn tại không
+        if not os.path.exists(directory_path):
+            print(f"Thư mục không tồn tại: {directory_path}")
+            return False
+
+        # Kiểm tra thuộc tính ẩn
+        result = subprocess.run(
+            ['attrib', directory_path],
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode == 0:
+            # Kiểm tra xem có chứa 'H' (hidden) không
+            return 'H' in result.stdout
+        else:
+            # print(f"Lỗi khi kiểm tra thuộc tính: {result.stderr}")
+            rzeturn False
+
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra thuộc tính: {e}")
+        return False

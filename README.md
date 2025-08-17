@@ -99,6 +99,24 @@ Download_TTS/
 - **Timeline**: Click vào slider để seek nhanh
 - **Lặp lại**: Bật/tắt chế độ lặp
 
+### 4. Quản lý thư mục (Windows)
+```python
+from app.utils.helps import (
+    hide_directory_on_windows,
+    show_directory_on_windows,
+    is_directory_hidden
+)
+
+# Ẩn thư mục
+hide_directory_on_windows("path/to/directory")
+
+# Hiện thư mục đã ẩn
+show_directory_on_windows("path/to/directory")
+
+# Kiểm tra trạng thái ẩn
+is_hidden = is_directory_hidden("path/to/directory")
+```
+
 ### 4. Ngắt đoạn audio
 - **Ngắt đoạn**: Bấm nút "✂️ Ngắt đoạn" khi đang phát audio
 - **Khoảng nghỉ cố định**: Tự động tạo khoảng nghỉ 3 giây

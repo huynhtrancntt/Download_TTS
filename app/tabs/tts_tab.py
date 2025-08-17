@@ -29,7 +29,8 @@ from app.workers import MTProducerWorker
 from app.utils.helps import (
     clean_all_temp_parts
 )
-from app.utils.audio_helpers import ms_to_mmss, prepare_pydub_ffmpeg, get_mp3_duration_ms, hide_directory_on_windows
+from app.utils.audio_helpers import ms_to_mmss, prepare_pydub_ffmpeg, get_mp3_duration_ms
+from app.utils.helps import hide_directory_on_windows
 
 # Import audio library
 from pydub import AudioSegment
