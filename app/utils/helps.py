@@ -139,30 +139,7 @@ def tts_sync_save(text, out_path, voice, rate_percent, pitch_hz):
     ))
 
 # ---------- Audio helpers ----------
-
-
-def get_mp3_duration_ms(path: str) -> int:
-    try:
-        seg = AudioSegment.from_file(path)
-        return int(seg.duration_seconds * 1000)
-    except Exception:
-        return 0
-
-
-def ms_to_mmss(ms: int) -> str:
-    if ms < 0:
-        ms = 0
-    s = ms // 1000
-    m = s // 60
-    s = s % 60
-    return f"{m:02d}:{s:02d}"
-
-
-def prepare_pydub_ffmpeg():
-    ffmpeg = which("ffmpeg") or r"C:\ffmpeg\bin\ffmpeg.exe"
-    ffprobe = which("ffprobe") or r"C:\ffmpeg\bin\ffprobe.exe"
-    AudioSegment.converter = ffmpeg
-    AudioSegment.ffprobe = ffprobe
+# Moved to audio_helpers.py to avoid circular import
 
 # ---------- Misc ----------
 
@@ -185,8 +162,8 @@ def timestamp_str():
 def save_log_entry(entry: dict):
     try:
         data = []
-        if LOG_PATH.exists():
-            with open(LOG_PATH, "r", encoding="utf-8") as f:
+        if TTSConfig.LOG_PATH.exists():
+            with open(TTSConfig.LOG_PATH, "r", encoding="utf-8") as f:
                 try:
                     data = json.load(f)
                     if not isinstance(data, list):
@@ -194,7 +171,7 @@ def save_log_entry(entry: dict):
                 except Exception:
                     data = []
         data.append(entry)
-        with open(LOG_PATH, "w", encoding="utf-8") as f:
+        with open(TTSConfig.LOG_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         print("Log write error:", e)

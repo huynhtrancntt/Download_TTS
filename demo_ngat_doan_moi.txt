@@ -1,0 +1,39 @@
+Đây là file demo để test chức năng ngắt đoạn mới.
+
+Chức năng đã được sửa để:
+1. Sử dụng vị trí hiện tại của audio player để ngắt đoạn
+2. Bấm nút "✂️ Ngắt đoạn" để thực hiện
+3. Ngắt theo tùy chọn từ dropdown (3s, 4s, 5s, 10s)
+4. Giữ lại tên file cũ và thêm đoạn mới vào
+5. Vị trí ngắt đoạn được phép ở ĐẦU, CUỐI hoặc SAU segment
+
+Cách sử dụng:
+1. Bấm "🔊 Chuyển đổi" để tạo TTS
+2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+   - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+   - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+   - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại
+3. Bấm "✂️ Ngắt đoạn" để tạo khoảng nghỉ theo tùy chọn
+4. Bấm "🎬 Thêm Video" để thêm video mới
+5. Video sẽ tạo ra audio 3 giây và audio cũ vẫn được giữ nguyên
+
+Ví dụ cụ thể:
+- Có 10 đoạn audio
+- Chọn video thứ 5 (có thời lượng 10s)
+- Di chuyển đến cuối video thứ 5
+- Bấm "✂️ Ngắt đoạn" → Tạo khoảng nghỉ SAU video thứ 5
+
+Kết quả mong đợi:
+- Audio gốc: Giữ nguyên tên file và nội dung
+- Khoảng nghỉ: Theo tùy chọn đã chọn (3s, 4s, 5s, 10s)
+  - Nếu ngắt ở ĐẦU: Khoảng nghỉ + Audio gốc
+  - Nếu ngắt ở CUỐI hoặc GIỮA: Audio gốc + Khoảng nghỉ
+- Video audio: 3 giây
+- Tổng cộng: Khoảng nghỉ + Audio gốc + Video audio (hoặc ngược lại)
+
+Tính năng mới:
+- Sử dụng vị trí hiện tại của audio player để ngắt đoạn
+- Cho phép ngắt ở đầu, cuối hoặc sau segment
+- Dropdown khoảng nghỉ hoạt động đúng
+- Tooltip hiển thị vị trí hiện tại và khoảng nghỉ đã chọn
+- Thông báo lỗi rõ ràng nếu vị trí không hợp lệ

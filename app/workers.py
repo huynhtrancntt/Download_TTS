@@ -14,8 +14,9 @@ from typing import Optional, List
 from PySide6.QtCore import QThread, Signal
 from pydub import AudioSegment
 
-from app.constants import TEMP_PREFIX, OUTPUT_DIR
-from app.utils.helps import split_text, tts_sync_save, get_mp3_duration_ms, save_log_entry
+from app.appConfig import AppConfig
+from app.utils.helps import split_text, tts_sync_save, save_log_entry
+from app.utils.audio_helpers import get_mp3_duration_ms
 
 # ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 
@@ -92,7 +93,7 @@ class MTProducerWorker(QThread):
                 return
 
             # Tạo thư mục tạm để lưu các file audio
-            self.tmpdir = tempfile.mkdtemp(prefix=TEMP_PREFIX)
+            self.tmpdir = tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX)
             self.status.emit(f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
 
             # Khởi tạo biến theo dõi tiến trình
@@ -216,7 +217,7 @@ class OneFileWorker(QThread):
     def run(self):
         start_time = datetime.now().isoformat()
         base_name = Path(self.txt_path).stem
-        self.tempdir = Path(tempfile.mkdtemp(prefix=TEMP_PREFIX))
+        self.tempdir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
 
         try:
             with open(self.txt_path, "r", encoding="utf-8") as f:
@@ -269,7 +270,7 @@ class OneFileWorker(QThread):
                 final += seg + gap
 
             out_name = f"{base_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-            out_path = OUTPUT_DIR / out_name
+            out_path = AppConfig.OUTPUT_DIR / out_name
             final.export(str(out_path), format="mp3")
 
             self.status.emit(

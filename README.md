@@ -7,8 +7,11 @@
 - **Text-to-Speech**: Chuyển đổi văn bản thành giọng nói với nhiều ngôn ngữ
 - **Đa luồng xử lý**: Hỗ trợ xử lý song song với nhiều worker threads
 - **Player tích hợp**: Phát audio với điều khiển timeline và seek
+- **Ngắt đoạn thông minh**: ✂️ Ngắt đoạn audio tại vị trí bất kỳ với khoảng nghỉ 3 giây cố định
+- **Thêm video**: 🎬 Thêm file video tạo audio 3 giây tự động
+- **Giữ nguyên audio**: Audio gốc không bị mất khi ngắt đoạn hoặc thêm video
 - **Lịch sử**: Lưu trữ và quản lý các lần chuyển đổi
-- **Xuất MP3**: Ghép các đoạn audio thành file MP3 hoàn chỉnh
+- **Xuất MP3**: Ghép các đoạn audio thành file MP3 hoàn chỉnh với khoảng nghỉ tự động
 - **Giao diện thân thiện**: UI hiện đại với PySide6
 
 ## 🚀 Cài đặt và chạy
@@ -96,8 +99,22 @@ Download_TTS/
 - **Timeline**: Click vào slider để seek nhanh
 - **Lặp lại**: Bật/tắt chế độ lặp
 
-### 4. Xuất file
-- **Lưu MP3**: Ghép các đoạn thành file hoàn chỉnh
+### 4. Ngắt đoạn audio
+- **Ngắt đoạn**: Bấm nút "✂️ Ngắt đoạn" khi đang phát audio
+- **Khoảng nghỉ cố định**: Tự động tạo khoảng nghỉ 3 giây
+- **Giữ nguyên audio**: Audio gốc không bị mất khi ngắt đoạn
+- **Vị trí ngắt**: Ngắt tại vị trí hiện tại đang phát
+- **Tự động cập nhật**: UI và player tự động cập nhật sau khi ngắt
+
+### 5. Thêm video
+- **Thêm video**: Bấm nút "🎬 Thêm Video" để chọn file video
+- **Hỗ trợ định dạng**: MP4, AVI, MKV, MOV, WMV
+- **Tạo audio tự động**: Video sẽ tạo ra file âm thanh 3 giây
+- **Giữ nguyên audio cũ**: Audio gốc và khoảng nghỉ không bị mất
+
+### 6. Xuất file
+- **Lưu MP3**: Ghép các đoạn thành file hoàn chỉnh với khoảng nghỉ
+- **Xử lý thông minh**: Tự động nhận diện và xử lý các khoảng nghỉ đã tạo
 - **Lịch sử**: Xem và tái sử dụng các lần chuyển đổi
 
 ## ⚙️ Cấu hình
@@ -137,6 +154,11 @@ VOICE_CHOICES = [
 - Styles: `app/ui/styles.py`
 - Layout: `app/tabs/tts_tab.py`
 - Icons: `images/`
+
+### Cấu hình đường dẫn
+- **Temp directory**: `app/core/config.py` - `TTSConfig.TEMP_DIR`
+- **Output directory**: `app/core/config.py` - `AppConfig.OUTPUT_DIR`
+- **File prefixes**: `app/core/config.py` - `TTSConfig.TEMP_PREFIX`
 
 ### Thêm tính năng mới
 - Tạo tab mới: Kế thừa từ `UIToolbarTab`
@@ -179,6 +201,18 @@ logging.basicConfig(level=logging.DEBUG)
 ```
 
 ## 📝 Changelog
+
+### Version 1.2.0 (2024-12-19)
+- ✂️ **Ngắt đoạn audio cải tiến**: Giữ nguyên audio gốc, chỉ tạo khoảng nghỉ 3 giây
+- 🎬 **Thêm video mới**: Hỗ trợ thêm file video tạo audio 3 giây tự động
+- 🔄 **Đơn giản hóa logic**: Loại bỏ logic phức tạp chia nhỏ segment
+- 🎵 **Bảo toàn nội dung**: Audio cũ không bị mất khi ngắt đoạn hoặc thêm video
+
+### Version 1.1.0
+- ✂️ **Ngắt đoạn audio thông minh**: Ngắt đoạn tại vị trí bất kỳ với khoảng nghỉ tùy chỉnh
+- 🔄 **Tự động cập nhật**: UI và player tự động cập nhật sau khi ngắt đoạn
+- 📊 **Thống kê nâng cao**: Hiển thị thông tin chi tiết về segments, khoảng nghỉ, và đoạn đã ngắt
+- 🎯 **Xuất MP3 thông minh**: Tự động xử lý các khoảng nghỉ khi xuất file
 
 ### Version 1.0.0
 - ✅ Giao diện TTS hoàn chỉnh

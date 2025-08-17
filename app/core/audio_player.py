@@ -11,7 +11,7 @@ from typing import Optional, List, Tuple
 import os
 import time
 
-from app.utils.helps import ms_to_mmss
+from app.utils.audio_helpers import ms_to_mmss
 
 
 class ClickSlider(QSlider):
@@ -42,6 +42,7 @@ class AudioPlayer(QWidget):
     duration_changed = Signal(int)  # Tổng thời lượng (ms)
     playback_state_changed = Signal(bool)  # Trạng thái phát (True = đang phát)
     segment_changed = Signal(int)  # Segment hiện tại
+    timeline_clicked = Signal(int)  # Timeline được click tại vị trí (ms)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -429,6 +430,10 @@ class AudioPlayer(QWidget):
         
         self._pending_seek_value = value
         self.apply_seek_target()
+        
+        # Phát signal timeline_clicked
+        self.timeline_clicked.emit(value)
+        
         QTimer.singleShot(800, self._reset_seeking_flag)
 
     # ==================== Media Player Callbacks ====================

@@ -1,0 +1,13 @@
+Đây là đoạn văn bản demo để test chức năng ngắt đoạn.
+
+Đoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.
+
+Mỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.
+
+Bạn có thể sử dụng nút "✂️ Ngắt đoạn" để chia đoạn này thành các phần nhỏ hơn.
+
+Chức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.
+
+Hãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.
+
+Sau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.

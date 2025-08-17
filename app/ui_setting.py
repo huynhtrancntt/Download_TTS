@@ -296,35 +296,65 @@ def get_spinbox_styles(down_arrow, up_arrow):
     """
 
 
-def get_checkbox_radio_styles():
+def get_checkbox_radio_styles(down_arrow):
     """Get checkbox and radio button styles"""
     return f"""
         QCheckBox::indicator {{
-            width: 16px;
-            height: 16px;
-            border: 1px solid {COLORS['border']};
-            border-radius: 50px;
-            background-color: transparent;
+            width: 18px;
+            height: 18px;
+            border: 2px solid {COLORS['accent_gray']};
+            border-radius: 4px;
+            background-color: {COLORS['secondary_bg']};
+            margin: 2px;
+        }}
+        QCheckBox::indicator:hover {{
+            border: 2px solid {COLORS['accent_green']};
         }}
         QCheckBox::indicator:checked {{
-            background-color: {COLORS['accent_green']};
+          
+            border: 2px solid {COLORS['accent_green']};
+            image: url("{down_arrow}");
+        }}
+        QCheckBox::indicator:checked:hover {{
+
+            border: 2px solid {COLORS['accent_green_hover']};
         }}
         QCheckBox {{
-            color: {COLORS['text_primary']};
+            color: {COLORS['text_white']};
             font-size: {FONTS['size_normal']};
+            spacing: 8px;
+            padding: 2px;
+        }}
+        QCheckBox:hover {{
+            color: {COLORS['accent_green']};
         }}
         QRadioButton {{
-            color: {COLORS['text_primary']};
+            color: {COLORS['text_white']};
             font-size: {FONTS['size_normal']};
+            spacing: 8px;
+            padding: 2px;
+        }}
+        QRadioButton:hover {{
+            color: {COLORS['accent_green']};
         }}
         QRadioButton::indicator {{
-            width: 16px;
-            height: 16px;
-            border-radius: 8px;
-            background-color: transparent;
+            width: 18px;
+            height: 18px;
+            border: 2px solid {COLORS['accent_gray']};
+            border-radius: 9px;
+            background-color: {COLORS['secondary_bg']};
+            margin: 2px;
+        }}
+        QRadioButton::indicator:hover {{
+            border: 2px solid {COLORS['accent_green']};
         }}
         QRadioButton::indicator:checked {{
             background-color: {COLORS['accent_green']};
+            border: 2px solid {COLORS['accent_green']};
+        }}
+        QRadioButton::indicator:checked:hover {{
+            background-color: {COLORS['accent_green_hover']};
+            border: 2px solid {COLORS['accent_green_hover']};
         }}
     """
 
@@ -561,7 +591,7 @@ def _init_addStyle(self):
         get_input_styles() +
         get_combobox_styles(arrow_icon_path) +
         get_spinbox_styles(down_arrow, up_arrow) +
-        get_checkbox_radio_styles() +
+        get_checkbox_radio_styles(down_arrow) +
         get_slider_styles() +
         get_list_widget_styles() +
         get_progress_bar_styles() +

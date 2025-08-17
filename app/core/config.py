@@ -90,3 +90,4 @@ class TTSConfig:
 
     # Thiết lập file
     TEMP_PREFIX = "edge_tts_parts_"  # Tiền tố file tạm
+    TEMP_DIR = Path(__file__).resolve().parent.parent.parent / "output" / "temp"   # Thư mục lưu file tạm

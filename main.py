@@ -179,6 +179,7 @@ class MainWindow(QMainWindow):
 
         # Thiết lập trạng thái ban đầu cho Tab TTS
         if not self._is_unlocked:
+            # Chỉ ẩn progress bar khi chưa unlock, nhưng vẫn giữ log
             self._hide_progress_bar()
         else:
             # Thêm thông báo log cho trạng thái đã mở khóa mặc định
@@ -186,6 +187,7 @@ class MainWindow(QMainWindow):
                 "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", 
                 level="info"
             )
+            # Progress bar sẽ ẩn mặc định, chỉ hiện khi có giá trị
 
         # Đảm bảo output list hiển thị
         if hasattr(self, 'output_list') and self.output_list:
@@ -263,6 +265,10 @@ class MainWindow(QMainWindow):
         self.output_list.setAlternatingRowColors(True)  # Màu xen kẽ các dòng
         self.output_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)  # Cuộn mượt
         
+        # Giới hạn chiều cao của log frame để không quá dài
+        self.output_list.setMaximumHeight(150)  # Giới hạn chiều cao tối đa 150px
+        self.output_list.setMinimumHeight(100)  # Chiều cao tối thiểu 100px
+        
         progress_layout.addWidget(self.output_list)
 
     def _configure_progress_size_policies(self) -> None:
@@ -271,7 +277,8 @@ class MainWindow(QMainWindow):
         """
         self.progress_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.output_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Thay đổi size policy của output_list để không mở rộng quá mức
+        self.output_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
     def _setup_key_auth_group(self, parent_layout: QVBoxLayout) -> None:
         """
@@ -657,17 +664,13 @@ class MainWindow(QMainWindow):
 
                     self.status.showMessage(
                         "Tab Convert - Đã hiện progress section")
-                # Tab 1 (TTS) - Hide progress bar only if locked, keep log visible
+                # Tab 1 (TTS) - Hide progress bar initially, keep log visible
                 elif tab_index == 0:
                     self._hide_progress_bar()
-                    # if not self._is_unlocked:
-                    #     self._hide_progress_bar()
-                    #     self.status.showMessage("Tab TTS - Progress bar ẩn (chưa unlock), log hiển thị")
-                    # else:
-                    #     self.status.showMessage("Tab TTS - Progress bar hiện (đã unlock), log hiển thị")
                     # Keep log visible
                     if hasattr(self, 'output_list') and self.output_list:
                         self.output_list.setVisible(True)
+                    self.status.showMessage("Tab TTS - Progress bar ẩn, log hiển thị")
 
             # Safe layout update after tab change
             self._safe_layout_update()
