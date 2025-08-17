@@ -1,8 +1,15 @@
+# -*- coding: utf-8 -*-
+"""
+Workers cho xử lý TTS đa luồng
+Chứa các worker class để xử lý text-to-speech song song và batch processing
+"""
+
 import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, List
 
 from PySide6.QtCore import QThread, Signal
 from pydub import AudioSegment
@@ -10,68 +17,125 @@ from pydub import AudioSegment
 from app.constants import TEMP_PREFIX, OUTPUT_DIR
 from app.utils.helps import split_text, tts_sync_save, get_mp3_duration_ms, save_log_entry
 
-# ---------- Tab 1: MTProducerWorker (đa luồng, phát đúng thứ tự) ----------
+# ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 
 
 class MTProducerWorker(QThread):
+    """
+    Worker đa luồng cho việc tạo audio TTS
+    Xử lý văn bản song song và phát theo đúng thứ tự
+    
+    Signals:
+        segment_ready: Phát khi một đoạn audio được tạo xong (path, duration_ms, index)
+        progress: Tiến trình xử lý (completed, total)
+        status: Thông báo trạng thái
+        all_done: Hoàn thành tất cả
+        error: Có lỗi xảy ra
+    """
+    
+    # Định nghĩa các signals
     segment_ready = Signal(str, int, int)  # path, duration_ms, index1
-    progress = Signal(int, int)
-    status = Signal(str)
-    all_done = Signal()
-    error = Signal(str)
+    progress = Signal(int, int)            # completed, total
+    status = Signal(str)                   # status message
+    all_done = Signal()                    # all processing done
+    error = Signal(str)                    # error message
 
-    def __init__(self, text: str, voice: str, rate: int, pitch: int, max_len: int, workers: int):
+    def __init__(self, text: str, voice: str, rate: int, pitch: int, max_len: int, workers: int) -> None:
+        """
+        Khởi tạo worker TTS đa luồng
+        
+        Args:
+            text: Văn bản cần chuyển đổi
+            voice: Giọng nói (ví dụ: "vi-VN-HoaiMyNeural")
+            rate: Tốc độ (-50 đến 50)
+            pitch: Cao độ (-12 đến 12)
+            max_len: Độ dài tối đa mỗi đoạn (ký tự)
+            workers: Số luồng xử lý song song
+        """
         super().__init__()
-        self.text = text
-        self.voice = voice
-        self.rate = rate
-        self.pitch = pitch
-        self.max_len = max_len
-        self.workers = max(1, workers)
-        self.stop_flag = False
-        self.tmpdir = None
+        
+        # Tham số TTS
+        self.text: str = text
+        self.voice: str = voice
+        self.rate: int = rate
+        self.pitch: int = pitch
+        self.max_len: int = max_len
+        self.workers: int = max(1, workers)  # Tối thiểu 1 worker
+        
+        # Trạng thái worker
+        self.stop_flag: bool = False
+        self.tmpdir: Optional[str] = None
 
-    def stop(self):
+    def stop(self) -> None:
+        """
+        Dừng worker (set flag để các thread con dừng)
+        """
         self.stop_flag = True
 
-    def run(self):
+    def run(self) -> None:
+        """
+        Phương thức chính chạy worker TTS
+        Chia văn bản thành chunks và xử lý song song
+        """
         try:
+            # Kiểm tra văn bản đầu vào
             if not self.text.strip():
-                self.error.emit("Chưa có nội dung văn bản.")
+                self.error.emit("❌ Chưa có nội dung văn bản để xử lý.")
                 return
 
+            # Chia văn bản thành các đoạn nhỏ
             chunks = split_text(self.text, self.max_len)
             total = len(chunks)
+            
             if total == 0:
-                self.error.emit("Không tách được đoạn nào từ văn bản.")
+                self.error.emit("❌ Không thể tách văn bản thành các đoạn.")
                 return
 
+            # Tạo thư mục tạm để lưu các file audio
             self.tmpdir = tempfile.mkdtemp(prefix=TEMP_PREFIX)
-            self.status.emit(
-                f"🚀 Bắt đầu sinh {total} đoạn bằng {self.workers} luồng…")
+            self.status.emit(f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
 
-            completed = {}
-            next_index = 1
-            emitted = 0
+            # Khởi tạo biến theo dõi tiến trình
+            completed = {}  # Dict lưu kết quả đã hoàn thành {index: (path, duration)}
+            next_index = 1  # Index tiếp theo cần emit
+            emitted = 0     # Số đoạn đã emit
 
-            def job(index1: int, content: str):
-                path = os.path.join(self.tmpdir, f"part_{index1:04d}.mp3")
-                tts_sync_save(content, path, self.voice, self.rate, self.pitch)
-                dur = get_mp3_duration_ms(path)
-                return (index1, path, dur)
+            def job(index1: int, content: str) -> tuple:
+                """
+                Job function cho mỗi worker thread
+                Args:
+                    index1: Index của đoạn (1-based)
+                    content: Nội dung văn bản đoạn
+                Returns:
+                    tuple: (index, path, duration_ms)
+                """
+                try:
+                    path = os.path.join(self.tmpdir, f"part_{index1:04d}.mp3")
+                    tts_sync_save(content, path, self.voice, self.rate, self.pitch)
+                    dur = get_mp3_duration_ms(path)
+                    return (index1, path, dur)
+                except Exception as e:
+                    raise Exception(f"Lỗi xử lý đoạn {index1}: {str(e)}")
 
-            with ThreadPoolExecutor(max_workers=self.workers) as ex:
-                futs = [ex.submit(job, i+1, c) for i, c in enumerate(chunks)]
-                for fut in as_completed(futs):
+            # Xử lý đa luồng với ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=self.workers) as executor:
+                # Submit tất cả jobs
+                futures = [executor.submit(job, i+1, chunk) for i, chunk in enumerate(chunks)]
+                
+                # Xử lý kết quả khi hoàn thành
+                for future in as_completed(futures):
                     if self.stop_flag:
+                        self.status.emit("⏹ Đã dừng theo yêu cầu người dùng.")
                         break
+                    
                     try:
-                        idx1, path, dur = fut.result()
+                        idx1, path, dur = future.result()
+                        completed[idx1] = (path, dur)
                     except Exception as e:
-                        self.status.emit(f"⚠️ Lỗi tạo 1 đoạn: {e}")
+                        self.status.emit(f"⚠️ {str(e)}")
                         continue
-                    completed[idx1] = (path, dur)
 
+                    # Emit các đoạn theo đúng thứ tự
                     while next_index in completed:
                         p, d = completed.pop(next_index)
                         self.segment_ready.emit(p, d, next_index)
@@ -79,6 +143,7 @@ class MTProducerWorker(QThread):
                         self.progress.emit(emitted, total)
                         next_index += 1
 
+            # Emit các đoạn còn lại (nếu có)
             while not self.stop_flag and next_index in completed:
                 p, d = completed.pop(next_index)
                 self.segment_ready.emit(p, d, next_index)
@@ -86,35 +151,67 @@ class MTProducerWorker(QThread):
                 self.progress.emit(emitted, total)
                 next_index += 1
 
-            self.all_done.emit()
+            if not self.stop_flag:
+                self.status.emit(f"✅ Hoàn thành tạo {emitted}/{total} đoạn audio.")
+                self.all_done.emit()
 
         except Exception as e:
-            self.error.emit(str(e))
+            self.error.emit(f"❌ Lỗi nghiêm trọng: {str(e)}")
 
 
-# ---------- Tab 2: OneFileWorker & BatchWorker ----------
+# ==================== OneFileWorker & BatchWorker - Workers cho xử lý batch files ====================
 
 
 class OneFileWorker(QThread):
+    """
+    Worker xử lý một file văn bản thành audio
+    Sử dụng cho chức năng batch convert nhiều file
+    
+    Signals:
+        progress: Tiến trình xử lý chunks (created, total, filename)
+        status: Trạng thái xử lý (message, filename)
+        done: Hoàn thành (output_path, filename)
+        failed: Thất bại (error_msg, filename)
+    """
+    
+    # Định nghĩa signals
     progress = Signal(int, int, str)   # created_chunks, total_chunks, filename
     status = Signal(str, str)          # status_msg, filename
     done = Signal(str, str)            # output_path, filename
     failed = Signal(str, str)          # error_msg, filename
 
     def __init__(self, txt_path: str, voice: str, rate: int, pitch: int,
-                 maxlen: int, gap_ms: int, workers_chunk: int):
+                 maxlen: int, gap_ms: int, workers_chunk: int) -> None:
+        """
+        Khởi tạo worker xử lý một file
+        
+        Args:
+            txt_path: Đường dẫn file văn bản
+            voice: Giọng nói
+            rate: Tốc độ
+            pitch: Cao độ
+            maxlen: Độ dài tối đa mỗi chunk
+            gap_ms: Khoảng cách giữa các chunk (ms)
+            workers_chunk: Số luồng xử lý chunk
+        """
         super().__init__()
-        self.txt_path = txt_path
-        self.voice = voice
-        self.rate = rate
-        self.pitch = pitch
-        self.maxlen = maxlen
-        self.gap_ms = gap_ms
-        self.workers_chunk = max(1, workers_chunk)
-        self.tempdir = None
-        self.stop_flag = False
+        
+        # Tham số xử lý
+        self.txt_path: str = txt_path
+        self.voice: str = voice
+        self.rate: int = rate
+        self.pitch: int = pitch
+        self.maxlen: int = maxlen
+        self.gap_ms: int = gap_ms
+        self.workers_chunk: int = max(1, workers_chunk)
+        
+        # Trạng thái worker
+        self.tempdir: Optional[Path] = None
+        self.stop_flag: bool = False
 
-    def stop(self): self.stop_flag = True
+    def stop(self) -> None:
+        """Dừng worker"""
+        self.stop_flag = True
 
     def run(self):
         start_time = datetime.now().isoformat()

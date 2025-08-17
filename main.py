@@ -1,193 +1,284 @@
+# -*- coding: utf-8 -*-
+"""
+Ứng dụng Text-to-Speech với giao diện PySide6
+Phiên bản tối ưu với comment tiếng Việt và cấu trúc code rõ ràng
+"""
+
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QProgressBar,
-    QMainWindow, QTabWidget, QStatusBar, QLineEdit, QGroupBox,
-    QListWidget, QListWidgetItem, QSizePolicy,
+    QLabel, QProgressBar, QMainWindow, QTabWidget, QStatusBar, 
+    QLineEdit, QGroupBox, QListWidget, QListWidgetItem, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer, QTime, QEvent, Signal
 from PySide6.QtGui import QAction, QColor, QIcon
 import sys
+import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+
+# Import các module của ứng dụng
 from app.historyPanel import HistoryPanel
 from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
 
-import os
-
 
 class ClickToCloseOverlay(QWidget):
-    """Overlay to detect clicks outside of panels"""
-    clicked_outside = Signal()
+    """
+    Lớp overlay để phát hiện click bên ngoài panel
+    Sử dụng để đóng các panel lịch sử khi click ra ngoài
+    """
+    clicked_outside = Signal()  # Signal phát ra khi click bên ngoài
 
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        """
+        Khởi tạo overlay
+        Args:
+            parent: Widget cha (thường là MainWindow)
+        """
         super().__init__(parent)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Widget)
-        self.setStyleSheet("background: rgba(0,0,0,0.25);")
-        self.hide()
+        self.setStyleSheet("background: rgba(0,0,0,0.25);")  # Nền trong suốt với opacity 25%
+        self.hide()  # Ẩn mặc định
 
-    def mousePressEvent(self, event):
-        """Handle mouse press to emit clicked_outside signal"""
+    def mousePressEvent(self, event) -> None:
+        """
+        Xử lý sự kiện click chuột để phát tín hiệu clicked_outside
+        Args:
+            event: Sự kiện click chuột
+        """
         self.clicked_outside.emit()
         event.accept()
 
 
 class MainWindow(QMainWindow):
-    """Main application window with improved architecture"""
+    """
+    Cửa sổ chính của ứng dụng Text-to-Speech
+    
+    Chức năng chính:
+    - Quản lý các tab chức năng (TTS, Convert, Simple)
+    - Xử lý tiến trình và trạng thái ứng dụng
+    - Quản lý hệ thống xác thực và lịch sử
+    - Điều khiển giao diện người dùng
+    """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Khởi tạo cửa sổ chính
+        Thiết lập giao diện, kết nối tín hiệu và khởi tạo trạng thái ban đầu
+        """
         super().__init__()
+        
+        # Áp dụng style cho ứng dụng
         _init_addStyle(self)
-        self._closing_history = False  # Prevent recursion in history close
-        self._setup_complete = False  # Track setup completion
+        
+        # Biến trạng thái nội bộ
+        self._closing_history: bool = False  # Ngăn đệ quy khi đóng lịch sử
+        self._setup_complete: bool = False   # Theo dõi quá trình khởi tạo
+        self._is_unlocked: bool = True       # Trạng thái mở khóa (mặc định đã mở)
+        
+        # Thiết lập các thành phần chính
         self._setup_window()
         self._setup_ui()
         self._setup_progress_system()
         self._setup_connections()
 
-        # Mark setup as complete
+        # Đánh dấu hoàn tất khởi tạo
         self._setup_complete = True
 
-        # Trigger initial tab state setup
+        # Kích hoạt trạng thái tab ban đầu
         current_tab = self.tabs.currentIndex()
         self._on_tab_changed(current_tab)
 
-    def _setup_window(self):
-        """Setup main window properties"""
+    def _setup_window(self) -> None:
+        """
+        Thiết lập thuộc tính cơ bản của cửa sổ chính
+        Bao gồm: tiêu đề, icon, kích thước và vị trí
+        """
+        # Thiết lập tiêu đề cửa sổ
         self.setWindowTitle(AppConfig.WINDOW_TITLE)
 
+        # Thiết lập icon ứng dụng
         icon_path = resource_path(AppConfig.ICON_PATH)
-        print(icon_path)
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
+        else:
+            print(f"Cảnh báo: Không tìm thấy icon tại {icon_path}")
 
+        # Có thể bật lại nếu cần thiết lập kích thước cố định
         # self.setMinimumSize(*AppConfig.MIN_WINDOW_SIZE)
-        # self.resize(*AppConfig.DEFAULT_WINDOW_SIZE)  # Set default size
-        # self.setStyleSheet(AppConfig.MAIN_STYLE)
-        # _init_addStyle(self)
-        # Center window on screen
+        # self.resize(*AppConfig.DEFAULT_WINDOW_SIZE)
+        
+        # Căn giữa cửa sổ trên màn hình
         self._center_on_screen()
 
-    def _setup_ui(self):
-        """Setup the main UI components"""
+    def _setup_ui(self) -> None:
+        """
+        Thiết lập các thành phần giao diện chính
+        Bao gồm: menu, tabs, progress bar, overlay
+        """
+        # Tạo widget trung tâm và layout chính
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(0)  # Giảm khoảng cách giữa các widget
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin
+        main_layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin để tối đa hóa không gian
 
-        # Menu and status bar FIRST - so tabs can access status bar
+        # Thiết lập menu và status bar TRƯỚC - để các tab có thể truy cập
         self._setup_menu_and_status()
 
-        # Tab widget
+        # Tạo widget tab chính
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
 
-        # Create tabs - now status bar is available
+        # Tạo các tab - bây giờ status bar đã sẵn sàng
+        self._setup_tabs()
+
+        # Thiết lập khu vực progress và log
+        self._setup_progress_ui(main_layout)
+
+        # Thiết lập overlay và controls
+        self._setup_overlay_controls()
+
+        # Khởi tạo trạng thái nút dựa trên trạng thái khóa
+        self._update_tab_buttons_visibility()
+
+        # Thiết lập trạng thái ban đầu của UI
+        self._initialize_ui_state()
+
+    def _setup_tabs(self) -> None:
+        """
+        Thiết lập và tạo các tab chức năng
+        Hiện tại chỉ có tab TTS, có thể mở rộng thêm Convert, Simple
+        """
+        # Tạo tab TTS
         self.tab_tts = TTSTab(self)
+        
+        # Có thể thêm các tab khác trong tương lai
         # self.tab_convert = ConvertTab(self)
         # self.tab_simple = SimpleTab(self)
 
-        self._all_tabs = [self.tab_tts]
+        # Lưu danh sách tất cả tabs để quản lý
+        self._all_tabs: List[UIToolbarTab] = [self.tab_tts]
 
-        # Add tabs to widget
+        # Thêm tabs vào widget
         self.tabs.addTab(self.tab_tts, "Text to Speech")
         # self.tabs.addTab(self.tab_convert, "Convert")
         # self.tabs.addTab(self.tab_simple, "Simple")
 
-        # main_layout.addStretch()
-        # Progress and log section
-        self._setup_progress_ui(main_layout)
-
-        # Overlay and controls
-        self._setup_overlay_controls()
-
-        # Initialize button visibility based on lock state
-        self._update_tab_buttons_visibility()
-
-        # Ensure progress_widget is visible by default (app starts on Tab 0 - TTS)
+    def _initialize_ui_state(self) -> None:
+        """
+        Khởi tạo trạng thái ban đầu của giao diện
+        Thiết lập visibility và trạng thái của các thành phần
+        """
+        # Đảm bảo progress widget hiển thị mặc định (ứng dụng bắt đầu ở Tab TTS)
         if hasattr(self, 'progress_widget') and self.progress_widget:
             self.progress_widget.setVisible(True)
 
-        # Set initial state for Tab 1: hide progress bar only if locked, show log
+        # Thiết lập trạng thái ban đầu cho Tab TTS
         if not self._is_unlocked:
             self._hide_progress_bar()
         else:
-            # Add log message for default unlocked state
+            # Thêm thông báo log cho trạng thái đã mở khóa mặc định
             self._add_log_item(
-                "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", level="info")
+                "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", 
+                level="info"
+            )
 
+        # Đảm bảo output list hiển thị
         if hasattr(self, 'output_list') and self.output_list:
             self.output_list.setVisible(True)
 
-    def _setup_progress_ui(self, parent_layout: QVBoxLayout):
-        """Setup progress UI section"""
-        self.progress_widget = QWidget()  # Store reference for hide/show
+    def _setup_progress_ui(self, parent_layout: QVBoxLayout) -> None:
+        """
+        Thiết lập khu vực giao diện tiến trình và log
+        Bao gồm: xác thực key, thanh tiến trình, nút điều khiển, khu vực log
+        """
+        # Tạo widget chứa toàn bộ khu vực progress
+        self.progress_widget = QWidget()
         progress_layout = QVBoxLayout(self.progress_widget)
         progress_layout.addStretch()
-        # Key Authentication Group Box
+        
+        # Thiết lập nhóm xác thực key
         self._setup_key_auth_group(progress_layout)
 
-        # Title - store reference for toggle
+        # Tiêu đề tiến trình - lưu reference để có thể ẩn/hiện
         self._progress_title = QLabel("Tiến trình xử lý")
         self._progress_title.setStyleSheet(
-            "font-size: 16px; font-weight: 600; margin-bottom: 10px;")
+            "font-size: 16px; font-weight: 600; margin-bottom: 10px;"
+        )
         progress_layout.addWidget(self._progress_title)
 
-        # Progress bar
+        # Thanh tiến trình chính
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         progress_layout.addWidget(self.progress_bar)
 
-        # Control buttons - responsive layout
+        # Tạo các nút điều khiển tiến trình
+        self._create_progress_control_buttons(progress_layout)
+
+        # Khu vực hiển thị log
+        self._setup_log_area(progress_layout)
+
+        # Thêm progress widget vào layout chính
+        parent_layout.addWidget(self.progress_widget)
+
+        # Thiết lập size policy để tối ưu hiển thị
+        self._configure_progress_size_policies()
+
+        # Thêm stretch cuối để căn chỉnh
+        progress_layout.addStretch()
+
+    def _create_progress_control_buttons(self, progress_layout: QVBoxLayout) -> None:
+        """
+        Tạo các nút điều khiển tiến trình (Bắt đầu, Tạm dừng, Tiếp tục, Dừng)
+        """
         button_layout = QHBoxLayout()
+        
+        # Tạo các nút điều khiển
         self.btn_start = QPushButton("▶ Bắt đầu")
         self.btn_pause = QPushButton("⏸ Tạm dừng")
         self.btn_resume = QPushButton("⏯ Tiếp tục")
         self.btn_stop = QPushButton("⏹ Dừng")
 
+        # Áp dụng style và kích thước cho các nút
         for btn in (self.btn_start, self.btn_pause, self.btn_resume, self.btn_stop):
             btn.setStyleSheet(AppConfig.BUTTON_STYLE)
-            btn.setMinimumWidth(70)  # Minimum width for progress buttons
-            btn.setMaximumWidth(100)  # Prevent buttons from being too wide
+            btn.setMinimumWidth(70)   # Chiều rộng tối thiểu
+            btn.setMaximumWidth(100)  # Chiều rộng tối đa để tránh quá lớn
             button_layout.addWidget(btn)
 
         button_layout.addStretch()
-        progress_layout.addStretch()
         progress_layout.addLayout(button_layout)
 
-        # Log area
+    def _setup_log_area(self, progress_layout: QVBoxLayout) -> None:
+        """
+        Thiết lập khu vực hiển thị log
+        """
         self.output_list = QListWidget()
-        # Make log area responsive - smaller for small screens
-        # self.output_list.setMinimumHeight(60)
-        # self.output_list.setMaximumHeight(80)
-        self.output_list.setAlternatingRowColors(True)
-        self.output_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        
+        # Cấu hình hiển thị log
+        self.output_list.setAlternatingRowColors(True)  # Màu xen kẽ các dòng
+        self.output_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)  # Cuộn mượt
+        
         progress_layout.addWidget(self.output_list)
 
-        parent_layout.addWidget(self.progress_widget)
+    def _configure_progress_size_policies(self) -> None:
+        """
+        Cấu hình size policy cho các thành phần progress để tối ưu hiển thị
+        """
+        self.progress_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.output_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # Set size policy to prevent pushing down when hidden
-        self.progress_widget.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.progress_bar.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.output_list.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # Remove unnecessary addStretch() calls
-        # progress_layout.addStretch()  # Removed to prevent pushing
-        # button_layout.addStretch()  # Removed to prevent pushing
-
-        # Add stretch only at the end if needed
-        progress_layout.addStretch()
-
-    def _setup_key_auth_group(self, parent_layout: QVBoxLayout):
-        """Setup key authentication group box"""
-        # Group box
+    def _setup_key_auth_group(self, parent_layout: QVBoxLayout) -> None:
+        """
+        Thiết lập nhóm xác thực key
+        Bao gồm: ô nhập key, nút mở khóa, trạng thái khóa
+        """
+        # Tạo group box cho xác thực
         key_group = QGroupBox("🔐 Xác thực truy cập")
         key_group.setStyleSheet("""
             QGroupBox {
@@ -206,19 +297,34 @@ class MainWindow(QMainWindow):
             }
         """)
 
+        # Layout ngang cho các thành phần trong group
         key_layout = QHBoxLayout(key_group)
-        # Reduce margins for smaller screens
-        key_layout.setContentsMargins(10, 5, 10, 5)
+        key_layout.setContentsMargins(10, 5, 10, 5)  # Giảm margin cho màn hình nhỏ
 
-        # Key input - make more compact
-        key_label = QLabel("Key:")  # Shortened label
+        # Tạo các thành phần xác thực
+        self._create_key_input_components(key_layout)
+
+        # Thêm group vào layout chính
+        parent_layout.addWidget(key_group)
+
+        # Khởi tạo trạng thái mở khóa mặc định
+        self._initialize_unlock_state()
+
+        # Lưu reference để có thể toggle sau này
+        self.key_auth_group = key_group
+
+    def _create_key_input_components(self, key_layout: QHBoxLayout) -> None:
+        """
+        Tạo các thành phần nhập key (label, input, button, status)
+        """
+        # Label cho key
+        key_label = QLabel("Key:")
         key_label.setStyleSheet("font-weight: normal; margin-right: 3px;")
 
+        # Ô nhập key
         self.key_input = QLineEdit()
-        self.key_input.setPlaceholderText(
-            "Nhập key...")  # Shortened placeholder
-        self.key_input.setMinimumWidth(80)   # Smaller minimum width
-        # Smaller max width for better layout
+        self.key_input.setPlaceholderText("Nhập key...")
+        self.key_input.setMinimumWidth(80)
         self.key_input.setMaximumWidth(150)
         self.key_input.setStyleSheet("""
             QLineEdit:focus {
@@ -227,7 +333,7 @@ class MainWindow(QMainWindow):
         """)
         self.key_input.textChanged.connect(self._on_key_changed)
 
-        # Unlock button
+        # Nút mở khóa
         self.unlock_btn = QPushButton("🔓 Mở khóa")
         self.unlock_btn.setStyleSheet("""
             QPushButton {
@@ -249,34 +355,32 @@ class MainWindow(QMainWindow):
         """)
         self.unlock_btn.clicked.connect(self._on_unlock_clicked)
 
-        # Status label - will be set to unlocked state later
+        # Label trạng thái khóa
         self.key_status = QLabel("🔒 Đã khóa")
         self.key_status.setStyleSheet("color: #FF6B35; font-weight: bold;")
 
+        # Thêm các thành phần vào layout
         key_layout.addWidget(key_label)
         key_layout.addWidget(self.key_input)
         key_layout.addWidget(self.unlock_btn)
         key_layout.addWidget(self.key_status)
         key_layout.addStretch()
 
-        parent_layout.addWidget(key_group)
-
-        # Initialize unlocked state - default unlocked
+    def _initialize_unlock_state(self) -> None:
+        """
+        Khởi tạo trạng thái mở khóa mặc định
+        Ứng dụng bắt đầu ở trạng thái đã mở khóa
+        """
+        # Thiết lập trạng thái đã mở khóa mặc định
         self._is_unlocked = True
 
-        # Set UI to unlocked state
+        # Cập nhật giao diện theo trạng thái đã mở khóa
         self.key_input.setText("HT")
         self.key_input.setEnabled(False)
         self.key_status.setText("✅ Đã mở khóa")
         self.key_status.setStyleSheet("color: #4CAF50; font-weight: bold;")
         self.unlock_btn.setText("✅ Đã mở")
         self.unlock_btn.setEnabled(False)
-
-        # Note: _update_tab_buttons_visibility() will be called after UI setup is complete
-
-        # Store reference to key_auth_group for toggling
-        self.key_auth_group = key_group
-        parent_layout.addWidget(self.key_auth_group)
 
     def _setup_overlay_controls(self):
         """Setup overlay and close button"""
