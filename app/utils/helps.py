@@ -318,7 +318,7 @@ def is_directory_hidden(directory_path):
             return 'H' in result.stdout
         else:
             # print(f"Lỗi khi kiểm tra thuộc tính: {result.stderr}")
-            rzeturn False
+            return False
 
     except Exception as e:
         print(f"Lỗi khi kiểm tra thuộc tính: {e}")
