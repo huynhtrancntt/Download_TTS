@@ -1,4 +1,5 @@
 PySide6
 pyinstaller
-
+pydub
+edge-tts
 # pyinstaller --noconsole --onefile --name EdgeTTSSuite main.py

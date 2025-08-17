@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Optional, Callable, Tuple
 from app.appConfig import AppConfig
 
+
 class HistoryPanel(QWidget):
-    
+
     """Improved history panel with better performance and UX"""
 
     def __init__(self, title_text: str = "Lịch sử",
@@ -20,8 +21,7 @@ class HistoryPanel(QWidget):
                  close_callback: Optional[Callable] = None,
                  parent: Optional[QWidget] = None):
         super().__init__(parent)
-       
-   
+
         self.setFixedWidth(AppConfig.HISTORY_PANEL_WIDTH)
         # self.setStyleSheet()
         self.item_factory = item_factory
@@ -37,7 +37,7 @@ class HistoryPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin để thiết kế lại
         layout.setSpacing(0)
-        
+
         # Background và viền phân biệt - use new styling
         from app.ui.styles import AppStyles
         self.setStyleSheet(f"""
@@ -50,7 +50,7 @@ class HistoryPanel(QWidget):
         # Header nhỏ gọn
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(12, 8, 12, 6)
-        
+
         self.title = QLabel(title_text)
         self.title.setStyleSheet(f"""
             color: {AppStyles.COLORS['text_primary']}; 
@@ -80,11 +80,12 @@ class HistoryPanel(QWidget):
         header_layout.addStretch()
         header_layout.addWidget(close_btn)
         layout.addLayout(header_layout)
-        
+
         # Thêm đường viền phân biệt
         separator = QWidget()
         separator.setFixedHeight(1)
-        separator.setStyleSheet(f"background-color: {AppStyles.COLORS['border']};")
+        separator.setStyleSheet(
+            f"background-color: {AppStyles.COLORS['border']};")
         layout.addWidget(separator)
 
         # QListWidget nhỏ gọn
@@ -130,7 +131,6 @@ class HistoryPanel(QWidget):
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         # layout.addWidget(QLabel("TTTTe"))
         layout.addWidget(self.history_list)
-        
 
     def add_history(self, text: str, lang: str = "vi-VN", meta: Optional[dict] = None):
         """Add a new history item using QListWidget"""
@@ -144,7 +144,7 @@ class HistoryPanel(QWidget):
             # Tạo QListWidgetItem
             list_item = QListWidgetItem()
             list_item.setSizeHint(item_widget.sizeHint())
-            
+
             # Thêm vào đầu danh sách (vị trí 0)
             self.history_list.insertItem(0, list_item)
             self.history_list.setItemWidget(list_item, item_widget)

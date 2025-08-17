@@ -2,18 +2,20 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
     QLabel, QProgressBar,
     QMainWindow, QTabWidget, QStatusBar, QLineEdit, QGroupBox,
-    QListWidget, QListWidgetItem, QSizePolicy
+    QListWidget, QListWidgetItem, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer, QTime, QEvent, Signal
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction, QColor, QIcon
 import sys
 from datetime import datetime
 from typing import Optional
 from app.historyPanel import HistoryPanel
-from app.appConfig import AppConfig
+from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
 from app.uiToolbarTab import UIToolbarTab
-from app.ui_setting import _init_addStyle
+from app.ui_setting import _init_addStyle, resource_path
+
+import os
 
 
 class ClickToCloseOverlay(QWidget):
@@ -56,6 +58,12 @@ class MainWindow(QMainWindow):
     def _setup_window(self):
         """Setup main window properties"""
         self.setWindowTitle(AppConfig.WINDOW_TITLE)
+
+        icon_path = resource_path(AppConfig.ICON_PATH)
+        print(icon_path)
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         # self.setMinimumSize(*AppConfig.MIN_WINDOW_SIZE)
         # self.resize(*AppConfig.DEFAULT_WINDOW_SIZE)  # Set default size
         # self.setStyleSheet(AppConfig.MAIN_STYLE)
@@ -917,6 +925,16 @@ def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
     window = MainWindow()
+    screen = app.primaryScreen().geometry()
+    screen_width = screen.width()
+
+    # Lấy kích thước cửa sổ
+    win_width = window.frameGeometry().width()
+   # Đặt vị trí: giữa theo chiều ngang, y = 0
+    x = (screen_width - win_width) // 2
+    y = 0
+
+    window.move(x, y)
     window.show()
     sys.exit(app.exec())
 

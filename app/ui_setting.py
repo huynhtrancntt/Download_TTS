@@ -12,7 +12,7 @@ APP_VERSION = "1.6.0"  # Placeholder for actual version, replace with your app's
 # Color palette
 COLORS = {
     'primary_bg': '#0f172b',
-    'secondary_bg': '#1e293b', 
+    'secondary_bg': '#1e293b',
     'menu_bg': '#0d2538',
     'border': '#334155',
     'text_primary': '#e2e8f0',
@@ -123,6 +123,7 @@ def get_menu_styles():
         }}
     """
 
+
 def get_widget_base_styles():
     """Get base widget styles"""
     return f"""
@@ -138,6 +139,7 @@ def get_widget_base_styles():
             font-weight: normal;
         }}
     """
+
 
 def get_button_styles():
     """Get button styles"""
@@ -177,6 +179,7 @@ def get_button_styles():
         }}
     """
 
+
 def get_input_styles():
     """Get input field styles"""
     return f"""
@@ -194,6 +197,7 @@ def get_input_styles():
             border: 1px solid {COLORS['success_green']};
         }}
     """
+
 
 def get_combobox_styles(arrow_icon_path):
     """Get combobox specific styles"""
@@ -220,7 +224,8 @@ def get_combobox_styles(arrow_icon_path):
         }}
     """
 
-def get_spinbox_styles(arrow_icon_path):
+
+def get_spinbox_styles(down_arrow, up_arrow):
     """Get spinbox styles similar to combobox"""
     return f"""
         QSpinBox, QDoubleSpinBox {{
@@ -231,13 +236,12 @@ def get_spinbox_styles(arrow_icon_path):
             padding: {DIMENSIONS['padding_small']};
             min-height: 20px;
         }}
+        /*
         QSpinBox:hover, QDoubleSpinBox:hover {{
             border: 1px solid {COLORS['success_green']};
-        }}
-        QSpinBox:focus, QDoubleSpinBox:focus {{
-            border: 1px solid {COLORS['accent_blue']};
-        }}
-        QSpinBox::up-button, QDoubleSpinBox::up-button {{
+        }}*/
+
+        QSpinBox::up-button , QDoubleSpinBox::up-button {{
             subcontrol-origin: border;
             subcontrol-position: top right;
             width: 20px;
@@ -246,18 +250,23 @@ def get_spinbox_styles(arrow_icon_path):
             border-left-style: solid;
             border-top-right-radius: {DIMENSIONS['border_radius']};
             background-color: {COLORS['secondary_bg']};
+            border-top: 1px solid {COLORS['border']};
+            border-right: 1px solid {COLORS['border']};
         }}
+
+         
         QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover {{
-            background-color: {COLORS['button_hover']};
+            background-color: {COLORS['accent_gray']};
         }}
         QSpinBox::up-button:pressed, QDoubleSpinBox::up-button:pressed {{
             background-color: {COLORS['accent_gray']};
         }}
         QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
-            image: url("{arrow_icon_path}");
+            image: url("{up_arrow}");
             width: 12px;
             height: 12px;
             transform: rotate(180deg);
+            
         }}
         QSpinBox::down-button, QDoubleSpinBox::down-button {{
             subcontrol-origin: border;
@@ -268,19 +277,24 @@ def get_spinbox_styles(arrow_icon_path):
             border-left-style: solid;
             border-bottom-right-radius: {DIMENSIONS['border_radius']};
             background-color: {COLORS['secondary_bg']};
+            border-top: 1px solid {COLORS['border']};
+            border-right: 1px solid {COLORS['border']};
+            border-bottom: 1px solid {COLORS['border']};
         }}
+        
         QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
-            background-color: {COLORS['button_hover']};
+            background-color: {COLORS['accent_gray']};
         }}
         QSpinBox::down-button:pressed, QDoubleSpinBox::down-button:pressed {{
             background-color: {COLORS['accent_gray']};
         }}
         QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
-            image: url("{arrow_icon_path}");
+            image: url("{down_arrow}");
             width: 12px;
             height: 12px;
         }}
     """
+
 
 def get_checkbox_radio_styles():
     """Get checkbox and radio button styles"""
@@ -314,6 +328,7 @@ def get_checkbox_radio_styles():
         }}
     """
 
+
 def get_slider_styles():
     """Get slider styles"""
     return f"""
@@ -335,6 +350,7 @@ def get_slider_styles():
             border-radius: 8px;
         }}
     """
+
 
 def get_list_widget_styles():
     """Get list widget styles"""
@@ -365,6 +381,7 @@ def get_list_widget_styles():
         }}
     """
 
+
 def get_progress_bar_styles():
     """Get progress bar styles"""
     return f"""
@@ -382,6 +399,7 @@ def get_progress_bar_styles():
             border-radius: 5px;
         }}
     """
+
 
 def get_tab_styles():
     """Get tab widget styles"""
@@ -405,6 +423,7 @@ def get_tab_styles():
         }}
     """
 
+
 def get_group_box_styles():
     """Get group box styles"""
     return f"""
@@ -421,6 +440,7 @@ def get_group_box_styles():
         }}
     """
 
+
 def get_frame_styles():
     """Get frame styles"""
     return f"""
@@ -430,6 +450,7 @@ def get_frame_styles():
             padding: {DIMENSIONS['padding_xlarge']};
         }}
     """
+
 
 def get_player_styles():
     """Get player component styles"""
@@ -521,6 +542,7 @@ def get_player_styles():
         }}
     """
 
+
 def show_about_ui(self):
     about_text = ABOUT_TEMPLATE.format(version=self.version)
     QMessageBox.about(self, "Về ứng dụng", about_text)
@@ -529,7 +551,8 @@ def show_about_ui(self):
 def _init_addStyle(self):
     """Initialize application styles using modular style functions"""
     arrow_icon_path = resource_path("images/down-arrow.png").replace("\\", "/")
-    
+    down_arrow = resource_path("images/down.png").replace("\\", "/")
+    up_arrow = resource_path("images/up.png").replace("\\", "/")
     # Combine all style components
     combined_styles = (
         get_menu_styles() +
@@ -537,7 +560,7 @@ def _init_addStyle(self):
         get_button_styles() +
         get_input_styles() +
         get_combobox_styles(arrow_icon_path) +
-        get_spinbox_styles(arrow_icon_path) +
+        get_spinbox_styles(down_arrow, up_arrow) +
         get_checkbox_radio_styles() +
         get_slider_styles() +
         get_list_widget_styles() +
@@ -547,5 +570,5 @@ def _init_addStyle(self):
         get_frame_styles() +
         get_player_styles()
     )
-    
+
     self.setStyleSheet(combined_styles)
