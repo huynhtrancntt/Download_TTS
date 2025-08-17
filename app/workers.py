@@ -16,7 +16,7 @@ from pydub import AudioSegment
 
 from app.appConfig import AppConfig
 from app.utils.helps import split_text, tts_sync_save, save_log_entry
-from app.utils.audio_helpers import get_mp3_duration_ms
+from app.utils.audio_helpers import get_mp3_duration_ms, hide_directory_on_windows
 
 # ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 
@@ -25,7 +25,7 @@ class MTProducerWorker(QThread):
     """
     Worker đa luồng cho việc tạo audio TTS
     Xử lý văn bản song song và phát theo đúng thứ tự
-    
+
     Signals:
         segment_ready: Phát khi một đoạn audio được tạo xong (path, duration_ms, index)
         progress: Tiến trình xử lý (completed, total)
@@ -33,7 +33,7 @@ class MTProducerWorker(QThread):
         all_done: Hoàn thành tất cả
         error: Có lỗi xảy ra
     """
-    
+
     # Định nghĩa các signals
     segment_ready = Signal(str, int, int)  # path, duration_ms, index1
     progress = Signal(int, int)            # completed, total
@@ -44,7 +44,7 @@ class MTProducerWorker(QThread):
     def __init__(self, text: str, voice: str, rate: int, pitch: int, max_len: int, workers: int) -> None:
         """
         Khởi tạo worker TTS đa luồng
-        
+
         Args:
             text: Văn bản cần chuyển đổi
             voice: Giọng nói (ví dụ: "vi-VN-HoaiMyNeural")
@@ -54,7 +54,7 @@ class MTProducerWorker(QThread):
             workers: Số luồng xử lý song song
         """
         super().__init__()
-        
+
         # Tham số TTS
         self.text: str = text
         self.voice: str = voice
@@ -62,7 +62,7 @@ class MTProducerWorker(QThread):
         self.pitch: int = pitch
         self.max_len: int = max_len
         self.workers: int = max(1, workers)  # Tối thiểu 1 worker
-        
+
         # Trạng thái worker
         self.stop_flag: bool = False
         self.tmpdir: Optional[str] = None
@@ -87,17 +87,22 @@ class MTProducerWorker(QThread):
             # Chia văn bản thành các đoạn nhỏ
             chunks = split_text(self.text, self.max_len)
             total = len(chunks)
-            
+
             if total == 0:
                 self.error.emit("❌ Không thể tách văn bản thành các đoạn.")
                 return
 
             # Tạo thư mục tạm để lưu các file audio
             self.tmpdir = tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX)
-            self.status.emit(f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
+
+            hide_directory_on_windows(self.tmpdir)
+
+            self.status.emit(
+                f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
 
             # Khởi tạo biến theo dõi tiến trình
-            completed = {}  # Dict lưu kết quả đã hoàn thành {index: (path, duration)}
+            # Dict lưu kết quả đã hoàn thành {index: (path, duration)}
+            completed = {}
             next_index = 1  # Index tiếp theo cần emit
             emitted = 0     # Số đoạn đã emit
 
@@ -112,7 +117,8 @@ class MTProducerWorker(QThread):
                 """
                 try:
                     path = os.path.join(self.tmpdir, f"part_{index1:04d}.mp3")
-                    tts_sync_save(content, path, self.voice, self.rate, self.pitch)
+                    tts_sync_save(content, path, self.voice,
+                                  self.rate, self.pitch)
                     dur = get_mp3_duration_ms(path)
                     return (index1, path, dur)
                 except Exception as e:
@@ -121,14 +127,15 @@ class MTProducerWorker(QThread):
             # Xử lý đa luồng với ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=self.workers) as executor:
                 # Submit tất cả jobs
-                futures = [executor.submit(job, i+1, chunk) for i, chunk in enumerate(chunks)]
-                
+                futures = [executor.submit(job, i+1, chunk)
+                           for i, chunk in enumerate(chunks)]
+
                 # Xử lý kết quả khi hoàn thành
                 for future in as_completed(futures):
                     if self.stop_flag:
                         self.status.emit("⏹ Đã dừng theo yêu cầu người dùng.")
                         break
-                    
+
                     try:
                         idx1, path, dur = future.result()
                         completed[idx1] = (path, dur)
@@ -153,7 +160,8 @@ class MTProducerWorker(QThread):
                 next_index += 1
 
             if not self.stop_flag:
-                self.status.emit(f"✅ Hoàn thành tạo {emitted}/{total} đoạn audio.")
+                self.status.emit(
+                    f"✅ Hoàn thành tạo {emitted}/{total} đoạn audio.")
                 self.all_done.emit()
 
         except Exception as e:
@@ -167,14 +175,14 @@ class OneFileWorker(QThread):
     """
     Worker xử lý một file văn bản thành audio
     Sử dụng cho chức năng batch convert nhiều file
-    
+
     Signals:
         progress: Tiến trình xử lý chunks (created, total, filename)
         status: Trạng thái xử lý (message, filename)
         done: Hoàn thành (output_path, filename)
         failed: Thất bại (error_msg, filename)
     """
-    
+
     # Định nghĩa signals
     progress = Signal(int, int, str)   # created_chunks, total_chunks, filename
     status = Signal(str, str)          # status_msg, filename
@@ -185,7 +193,7 @@ class OneFileWorker(QThread):
                  maxlen: int, gap_ms: int, workers_chunk: int) -> None:
         """
         Khởi tạo worker xử lý một file
-        
+
         Args:
             txt_path: Đường dẫn file văn bản
             voice: Giọng nói
@@ -196,7 +204,7 @@ class OneFileWorker(QThread):
             workers_chunk: Số luồng xử lý chunk
         """
         super().__init__()
-        
+
         # Tham số xử lý
         self.txt_path: str = txt_path
         self.voice: str = voice
@@ -205,7 +213,7 @@ class OneFileWorker(QThread):
         self.maxlen: int = maxlen
         self.gap_ms: int = gap_ms
         self.workers_chunk: int = max(1, workers_chunk)
-        
+
         # Trạng thái worker
         self.tempdir: Optional[Path] = None
         self.stop_flag: bool = False
@@ -218,6 +226,8 @@ class OneFileWorker(QThread):
         start_time = datetime.now().isoformat()
         base_name = Path(self.txt_path).stem
         self.tempdir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
+
+        hide_directory_on_windows(self.tmpdir)
 
         try:
             with open(self.txt_path, "r", encoding="utf-8") as f:

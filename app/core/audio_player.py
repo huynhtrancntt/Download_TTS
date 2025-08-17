@@ -7,11 +7,13 @@ Cung cấp các chức năng cơ bản để phát, dừng, seek audio
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSlider, QCheckBox
 from PySide6.QtCore import Qt, QTimer, Signal, QUrl
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtGui import QKeyEvent, QShortcut
 from typing import Optional, List, Tuple
 import os
 import time
+from pydub import AudioSegment
 
-from app.utils.audio_helpers import ms_to_mmss
+from app.utils.audio_helpers import ms_to_mmss, get_mp3_duration_ms, hide_directory_on_windows
 
 
 class ClickSlider(QSlider):
@@ -43,6 +45,7 @@ class AudioPlayer(QWidget):
     playback_state_changed = Signal(bool)  # Trạng thái phát (True = đang phát)
     segment_changed = Signal(int)  # Segment hiện tại
     timeline_clicked = Signal(int)  # Timeline được click tại vị trí (ms)
+    audio_split_requested = Signal(int, int)  # Yêu cầu cắt audio (segment_index, split_position_ms)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,6 +61,9 @@ class AudioPlayer(QWidget):
         # Giá trị seek pending
         self._pending_seek_value: Optional[int] = None
         self._last_seek_time: float = 0.0
+        
+        # Lưu trạng thái audio trước khi kéo
+        self._was_playing_before_seek: bool = False
         
         # Thiết lập giao diện
         self._setup_ui()
@@ -95,6 +101,11 @@ class AudioPlayer(QWidget):
         self.chk_loop = QCheckBox("🔁 Lặp lại")
         self.chk_loop.setChecked(True)
         
+        # Nút cắt audio
+        self.btn_split = QPushButton("✂️")
+        self.btn_split.clicked.connect(self.split_audio_at_current_position)
+        self.btn_split.setToolTip("Cắt audio tại vị trí hiện tại")
+        
         # Thêm controls vào layout
         controls_layout.addWidget(self.btn_prev)
         controls_layout.addWidget(self.btn_playpause)
@@ -102,6 +113,7 @@ class AudioPlayer(QWidget):
         controls_layout.addWidget(self.slider, 1)
         controls_layout.addWidget(self.lbl_time)
         controls_layout.addWidget(self.chk_loop)
+        controls_layout.addWidget(self.btn_split)
         
         layout.addLayout(controls_layout)
         
@@ -123,6 +135,11 @@ class AudioPlayer(QWidget):
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.update_timeline)
         
+        # Timer cập nhật vị trí khi đang kéo slider
+        self.seek_update_timer = QTimer(self)
+        self.seek_update_timer.setInterval(50)  # Cập nhật nhanh hơn khi kéo
+        self.seek_update_timer.timeout.connect(self.update_seek_position)
+        
         # Kết nối tín hiệu player
         self.player.mediaStatusChanged.connect(self.on_media_status_changed)
         self.player.errorOccurred.connect(self.on_media_error)
@@ -140,6 +157,55 @@ class AudioPlayer(QWidget):
         self.slider.sliderMoved.connect(self.on_slider_moved)
         self.slider.sliderReleased.connect(self.on_slider_released)
         self.slider.clickedValue.connect(self.on_slider_clicked)
+        
+        # Thiết lập phím tắt
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        """Thiết lập các phím tắt cho audio player"""
+        # Phím tắt Spacebar để play/pause
+        self.space_shortcut = QShortcut(Qt.Key_Space, self)
+        self.space_shortcut.activated.connect(self.toggle_playpause)
+        
+        # Phím tắt Left Arrow để previous
+        self.left_shortcut = QShortcut(Qt.Key_Left, self)
+        self.left_shortcut.activated.connect(self.play_prev)
+        
+        # Phím tắt Right Arrow để next
+        self.right_shortcut = QShortcut(Qt.Key_Right, self)
+        self.right_shortcut.activated.connect(self.play_next)
+        
+        # Phím tắt Home để về đầu
+        self.home_shortcut = QShortcut(Qt.Key_Home, self)
+        self.home_shortcut.activated.connect(self.seek_to_beginning)
+        
+        # Phím tắt End để về cuối
+        self.end_shortcut = QShortcut(Qt.Key_End, self)
+        self.end_shortcut.activated.connect(self.seek_to_end)
+        
+        # Phím tắt Up Arrow để tăng âm lượng
+        self.up_shortcut = QShortcut(Qt.Key_Up, self)
+        self.up_shortcut.activated.connect(self.volume_up)
+        
+        # Phím tắt Down Arrow để giảm âm lượng
+        self.down_shortcut = QShortcut(Qt.Key_Down, self)
+        self.down_shortcut.activated.connect(self.volume_down)
+        
+        # Phím tắt M để mute/unmute
+        self.mute_shortcut = QShortcut(Qt.Key_M, self)
+        self.mute_shortcut.activated.connect(self.toggle_mute)
+        
+        # Phím tắt Shift + Left để rewind nhanh (10 giây)
+        self.rewind_shortcut = QShortcut(Qt.Key_Left | Qt.ShiftModifier, self)
+        self.rewind_shortcut.activated.connect(self.rewind_10s)
+        
+        # Phím tắt Shift + Right để fast forward nhanh (10 giây)
+        self.forward_shortcut = QShortcut(Qt.Key_Right | Qt.ShiftModifier, self)
+        self.forward_shortcut.activated.connect(self.forward_10s)
+        
+        # Phím tắt Ctrl+S để cắt audio
+        self.split_shortcut = QShortcut(Qt.Key_S | Qt.ControlModifier, self)
+        self.split_shortcut.activated.connect(self.split_audio_at_current_position)
 
     # ==================== Public Methods ====================
     
@@ -200,6 +266,46 @@ class AudioPlayer(QWidget):
         
         self._pending_seek_value = global_ms
         self.apply_seek_target()
+
+    def seek_to_beginning(self):
+        """Seek về đầu audio"""
+        self.seek_to(0)
+
+    def seek_to_end(self):
+        """Seek về cuối audio"""
+        if self.segment_paths:
+            self.seek_to(max(0, self.total_known_ms - 1))
+
+    def volume_up(self):
+        """Tăng âm lượng"""
+        current_volume = self.audio_output.volume()
+        new_volume = min(1.0, current_volume + 0.1)
+        self.audio_output.setVolume(new_volume)
+
+    def volume_down(self):
+        """Giảm âm lượng"""
+        current_volume = self.audio_output.volume()
+        new_volume = max(0.0, current_volume - 0.1)
+        self.audio_output.setVolume(new_volume)
+
+    def toggle_mute(self):
+        """Bật/tắt âm thanh"""
+        if self.audio_output.isMuted():
+            self.audio_output.setMuted(False)
+        else:
+            self.audio_output.setMuted(True)
+
+    def rewind_10s(self):
+        """Lùi nhanh 10 giây"""
+        current_pos = self.get_current_position()
+        new_pos = max(0, current_pos - 10000)  # 10 giây = 10000ms
+        self.seek_to(new_pos)
+
+    def forward_10s(self):
+        """Tiến nhanh 10 giây"""
+        current_pos = self.get_current_position()
+        new_pos = min(self.total_known_ms, current_pos + 10000)  # 10 giây = 10000ms
+        self.seek_to(new_pos)
 
     def get_current_position(self) -> int:
         """Lấy vị trí hiện tại (ms)"""
@@ -312,6 +418,117 @@ class AudioPlayer(QWidget):
             # Tạm dừng
             self.pause()
 
+    def split_audio_at_current_position(self):
+        """Cắt audio tại vị trí hiện tại"""
+        if self.current_index < 0:
+            return
+        
+        # Lấy vị trí hiện tại trong segment
+        current_pos_in_segment = self.player.position()
+        segment_duration = self.segment_durations[self.current_index] or 0
+        
+        # Kiểm tra vị trí cắt có hợp lệ không
+        if current_pos_in_segment <= 0 or current_pos_in_segment >= segment_duration:
+            return
+        
+        # Lấy thông tin segment để hiển thị trong hộp thoại xác nhận
+        segment_path = self.segment_paths[self.current_index]
+        segment_name = os.path.basename(segment_path) if segment_path else "Unknown"
+        current_time = ms_to_mmss(current_pos_in_segment)
+        total_time = ms_to_mmss(segment_duration)
+        
+        # Hiển thị hộp thoại xác nhận
+        from PySide6.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(
+            self, 
+            "Xác nhận cắt audio",
+            f"Bạn có muốn cắt audio không?\n\n"
+            f"File: {segment_name}\n"
+            f"Vị trí cắt: {current_time}\n"
+            f"Thời lượng gốc: {total_time}\n\n"
+            f"Kết quả sẽ tạo ra 2 file:\n"
+            f"• Phần 1: {current_time}\n"
+            f"• Phần 2: {ms_to_mmss(segment_duration - current_pos_in_segment)}",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        # Chỉ cắt nếu người dùng xác nhận
+        if reply == QMessageBox.Yes:
+            # Phát signal yêu cầu cắt audio
+            # Tham số: segment_index, split_position_ms
+            self.audio_split_requested.emit(self.current_index, current_pos_in_segment)
+
+    def split_audio_file(self, segment_index: int, split_position_ms: int) -> Tuple[str, str]:
+        """
+        Cắt audio file thành 2 phần
+        Returns: (path_part1, path_part2)
+        """
+        if segment_index < 0 or segment_index >= len(self.segment_paths):
+            return None, None
+        
+        original_path = self.segment_paths[segment_index]
+        if not original_path or not os.path.exists(original_path):
+            return None, None
+        
+        try:
+            # Load audio file
+            audio = AudioSegment.from_file(original_path)
+            
+            # Cắt thành 2 phần
+            part1 = audio[:split_position_ms]
+            part2 = audio[split_position_ms:]
+            
+            # Tạo tên file mới
+            base_name = os.path.splitext(os.path.basename(original_path))[0]
+            dir_path = os.path.dirname(original_path)
+            
+            part1_path = os.path.join(dir_path, f"part1_{base_name}.mp3")
+            part2_path = os.path.join(dir_path, f"part2_{base_name}.mp3")
+            
+            # Export 2 phần
+            part1.export(part1_path, format="mp3")
+            part2.export(part2_path, format="mp3")
+            
+            # Ẩn file sau khi tạo (chỉ trên Windows)
+            for file_path in [part1_path, part2_path]:
+                hide_directory_on_windows(file_path)
+            
+            return part1_path, part2_path
+            
+        except Exception as e:
+            print(f"Lỗi khi cắt audio: {e}")
+            return None, None
+
+    def update_segments_after_split(self, segment_index: int, part1_path: str, part2_path: str, split_position_ms: int):
+        """
+        Cập nhật segments list sau khi cắt audio
+        """
+        if segment_index < 0 or segment_index >= len(self.segment_paths):
+            return
+        
+        original_duration = self.segment_durations[segment_index] or 0
+        part1_duration = split_position_ms
+        part2_duration = original_duration - split_position_ms
+        
+        # Thay thế segment cũ bằng 2 phần mới
+        self.segment_paths[segment_index] = part1_path
+        self.segment_durations[segment_index] = part1_duration
+        
+        # Thêm phần thứ 2 vào cuối
+        self.segment_paths.append(part2_path)
+        self.segment_durations.append(part2_duration)
+        
+        # Cập nhật tổng thời lượng
+        self.total_known_ms = sum(d or 0 for d in self.segment_durations)
+        
+        # Cập nhật slider range
+        self.slider.setRange(0, max(0, self.total_known_ms))
+        
+        # Cập nhật label thời gian
+        self.update_time_label(self.get_current_position(), self.total_known_ms)
+
     def map_global_to_local(self, global_ms: int) -> Tuple[Optional[int], Optional[int]]:
         """Map vị trí global về segment index và vị trí local"""
         if not self.segment_durations or not any(self.segment_durations):
@@ -364,6 +581,10 @@ class AudioPlayer(QWidget):
             # Cập nhật label thời gian
             self.update_time_label(target, self.total_known_ms)
             
+            # Đảm bảo timer được khởi động nếu đang phát
+            if self.is_playing:
+                self.timer.start()
+            
             # Giữ seeking flag lâu hơn
             QTimer.singleShot(1000, self._reset_seeking_flag)
         else:
@@ -395,12 +616,33 @@ class AudioPlayer(QWidget):
         # Phát signal
         self.position_changed.emit(current_pos)
 
+    def update_seek_position(self):
+        """Cập nhật vị trí thời gian khi đang kéo slider"""
+        if not self.seeking or self._pending_seek_value is None:
+            return
+        
+        # Cập nhật label thời gian với vị trí đang kéo
+        self.update_time_label(self._pending_seek_value, self.total_known_ms)
+
     # ==================== Slider Event Handlers ====================
     
     def on_slider_pressed(self):
         """Slider được nhấn"""
         self.seeking = True
         self._last_seek_time = time.time()
+        
+        # Lưu trạng thái audio trước khi kéo
+        self._was_playing_before_seek = self.is_playing
+        
+        # Dừng timer khi bắt đầu kéo để tránh xung đột
+        self.timer.stop()
+        
+        # Dừng audio khi bắt đầu kéo
+        if self.is_playing:
+            self.player.pause()
+        
+        # Khởi động timer cập nhật vị trí khi kéo
+        self.seek_update_timer.start()
 
     def on_slider_moved(self, value: int):
         """Slider được kéo"""
@@ -410,6 +652,17 @@ class AudioPlayer(QWidget):
         if not self.seeking:
             self.seeking = True
             self._last_seek_time = time.time()
+        
+        # Cập nhật timer và vị trí thời gian ngay khi kéo
+        self.update_time_label(value, self.total_known_ms)
+        
+        # Cập nhật vị trí slider để tránh nhảy về vị trí cũ
+        self.slider.blockSignals(True)
+        self.slider.setValue(value)
+        self.slider.blockSignals(False)
+        
+        # Phát signal position_changed để cập nhật UI
+        self.position_changed.emit(value)
 
     def on_slider_released(self):
         """Slider được thả"""
@@ -417,12 +670,29 @@ class AudioPlayer(QWidget):
             self.seek_debounce.stop()
             self.apply_seek_target()
         
+        # Dừng timer cập nhật vị trí khi kéo
+        self.seek_update_timer.stop()
+        
+        # Cập nhật timer ngay khi thả slider
+        if self.is_playing:
+            self.timer.start()
+        
+        # Khởi động lại audio nếu trước đó đang phát
+        if self._was_playing_before_seek:
+            self.player.play()
+        
         QTimer.singleShot(800, self._reset_seeking_flag)
 
     def on_slider_clicked(self, value: int):
         """Slider được click"""
         self.seeking = True
         self._last_seek_time = time.time()
+        
+        # Lưu trạng thái audio trước khi click
+        self._was_playing_before_seek = self.is_playing
+        
+        # Dừng timer cập nhật vị trí khi kéo
+        self.seek_update_timer.stop()
         
         if not self.segment_durations or not any(self.segment_durations):
             self.seeking = False

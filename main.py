@@ -4,6 +4,7 @@
 Phiên bản tối ưu với comment tiếng Việt và cấu trúc code rõ ràng
 """
 
+from pickle import FALSE
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
     QLabel, QProgressBar, QMainWindow, QTabWidget, QStatusBar, 
@@ -77,7 +78,7 @@ class MainWindow(QMainWindow):
         # Biến trạng thái nội bộ
         self._closing_history: bool = False  # Ngăn đệ quy khi đóng lịch sử
         self._setup_complete: bool = False   # Theo dõi quá trình khởi tạo
-        self._is_unlocked: bool = True       # Trạng thái mở khóa (mặc định đã mở)
+        self._show_key_auth: bool = True     # Điều khiển hiển thị group xác thực key
         
         # Thiết lập các thành phần chính
         self._setup_window()
@@ -142,9 +143,6 @@ class MainWindow(QMainWindow):
         # Thiết lập overlay và controls
         self._setup_overlay_controls()
 
-        # Khởi tạo trạng thái nút dựa trên trạng thái khóa
-        self._update_tab_buttons_visibility()
-
         # Thiết lập trạng thái ban đầu của UI
         self._initialize_ui_state()
 
@@ -177,17 +175,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'progress_widget') and self.progress_widget:
             self.progress_widget.setVisible(True)
 
-        # Thiết lập trạng thái ban đầu cho Tab TTS
-        if not self._is_unlocked:
-            # Chỉ ẩn progress bar khi chưa unlock, nhưng vẫn giữ log
-            self._hide_progress_bar()
-        else:
-            # Thêm thông báo log cho trạng thái đã mở khóa mặc định
-            self._add_log_item(
-                "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", 
-                level="info"
-            )
-            # Progress bar sẽ ẩn mặc định, chỉ hiện khi có giá trị
+        # Thêm thông báo log cho trạng thái đã sẵn sàng
+        self._add_log_item(
+            "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", 
+            level="info"
+        )
+        # Progress bar sẽ ẩn mặc định, chỉ hiện khi có giá trị
 
         # Đảm bảo output list hiển thị
         if hasattr(self, 'output_list') and self.output_list:
@@ -314,11 +307,12 @@ class MainWindow(QMainWindow):
         # Thêm group vào layout chính
         parent_layout.addWidget(key_group)
 
-        # Khởi tạo trạng thái mở khóa mặc định
-        self._initialize_unlock_state()
-
         # Lưu reference để có thể toggle sau này
         self.key_auth_group = key_group
+        
+        self._show_key_auth = False
+        # Sử dụng biến điều khiển để ẩn/hiện group
+        key_group.setVisible(self._show_key_auth)
 
     def _create_key_input_components(self, key_layout: QHBoxLayout) -> None:
         """
@@ -373,22 +367,6 @@ class MainWindow(QMainWindow):
         key_layout.addWidget(self.key_status)
         key_layout.addStretch()
 
-    def _initialize_unlock_state(self) -> None:
-        """
-        Khởi tạo trạng thái mở khóa mặc định
-        Ứng dụng bắt đầu ở trạng thái đã mở khóa
-        """
-        # Thiết lập trạng thái đã mở khóa mặc định
-        self._is_unlocked = True
-
-        # Cập nhật giao diện theo trạng thái đã mở khóa
-        self.key_input.setText("HT")
-        self.key_input.setEnabled(False)
-        self.key_status.setText("✅ Đã mở khóa")
-        self.key_status.setStyleSheet("color: #4CAF50; font-weight: bold;")
-        self.unlock_btn.setText("✅ Đã mở")
-        self.unlock_btn.setEnabled(False)
-
     def _setup_overlay_controls(self):
         """Setup overlay and close button"""
         # Overlay for clicking outside panels
@@ -436,6 +414,22 @@ class MainWindow(QMainWindow):
         close_history_action.triggered.connect(self._close_current_tab_history)
         view_menu.addAction(close_history_action)
 
+        # Thêm action để điều khiển hiển thị group xác thực key
+        toggle_key_auth_action = QAction("Hiện/Ẩn xác thực key", self)
+        toggle_key_auth_action.triggered.connect(self.toggle_key_auth_visibility)
+        view_menu.addAction(toggle_key_auth_action)
+
+        # Thêm action để ẩn group xác thực key
+        hide_key_auth_action = QAction("Ẩn xác thực key", self)
+        hide_key_auth_action.triggered.connect(lambda: self.set_key_auth_visibility(False))
+        view_menu.addAction(hide_key_auth_action)
+
+        # Thêm action để hiện group xác thực key
+        show_key_auth_action = QAction("Hiện xác thực key", self)
+        show_key_auth_action.triggered.connect(lambda: self.set_key_auth_visibility(True))
+        view_menu.addAction(show_key_auth_action)
+
+
         # Status bar
         self.status = QStatusBar()
         self.setStatusBar(self.status)
@@ -471,35 +465,23 @@ class MainWindow(QMainWindow):
     def _on_key_changed(self):
         """Handle key input change"""
         key = self.key_input.text().strip().upper()
-        self.unlock_btn.setEnabled(len(key) > 0 and not self._is_unlocked)
+        self.unlock_btn.setEnabled(len(key) > 0)
 
-        # Auto unlock if correct key is entered and not already unlocked
-        if key == "HT" and not self._is_unlocked:
+        # Auto unlock if correct key is entered
+        if key == "HT":
             self._on_unlock_clicked()
 
     def _on_unlock_clicked(self):
         """Handle unlock button click"""
-        # Skip if already unlocked
-        if self._is_unlocked:
-            return
-
         key = self.key_input.text().strip().upper()
 
         if key == "HT":
-            self._is_unlocked = True
-            self.key_status.setText("✅ Đã mở khóa")
-            self.key_status.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            self.unlock_btn.setText("✅ Đã mở")
-            self.unlock_btn.setEnabled(False)
-            self.key_input.setEnabled(False)
+            # Ẩn group xác thực key khi unlock thành công
+            self._show_key_auth = False
+            if hasattr(self, 'key_auth_group') and self.key_auth_group:
+                self.key_auth_group.setVisible(self._show_key_auth)
+            
             self._update_tab_buttons_visibility()
-
-            # Show progress bar if currently in Tab 1 (TTS)
-            current_tab_index = self.tabs.currentIndex()
-            if current_tab_index == 0:  # Tab 1 (TTS)
-                self._show_progress_bar()
-                self.status.showMessage(
-                    "Tab TTS - Đã unlock, progress bar hiển thị")
 
             # Show success message in log
             self._add_log_item(
@@ -514,33 +496,55 @@ class MainWindow(QMainWindow):
             # Show error in log
             self._add_log_item(f"❌ Key không đúng: '{key}'", level="error")
 
+    def toggle_key_auth_visibility(self):
+        """Toggle hiển thị/ẩn group xác thực key"""
+        self._show_key_auth = not self._show_key_auth
+        if hasattr(self, 'key_auth_group') and self.key_auth_group:
+            self.key_auth_group.setVisible(self._show_key_auth)
+        
+        # Log trạng thái
+        status = "hiển thị" if self._show_key_auth else "ẩn"
+        self._add_log_item(f"🔐 Group xác thực key: {status}", level="info")
+
+    def set_key_auth_visibility(self, visible: bool):
+        """Set hiển thị/ẩn group xác thực key"""
+        self._show_key_auth = visible
+        if hasattr(self, 'key_auth_group') and self.key_auth_group:
+            self.key_auth_group.setVisible(self._show_key_auth)
+        
+        # Log trạng thái
+        status = "hiển thị" if self._show_key_auth else "ẩn"
+        self._add_log_item(f"🔐 Group xác thực key: {status}", level="info")
+
+
+
     def _update_tab_buttons_visibility(self):
-        """Update visibility of buttons in all tabs based on unlock status"""
+        """Update visibility of buttons in all tabs"""
         # Update tab buttons if they exist
         if hasattr(self, '_all_tabs'):
             for tab in self._all_tabs:
                 if hasattr(tab, 'btn_convert'):
-                    tab.btn_convert.setEnabled(self._is_unlocked)
+                    tab.btn_convert.setEnabled(True)
                 if hasattr(tab, 'btn_start'):
-                    tab.btn_start.setEnabled(self._is_unlocked)
+                    tab.btn_start.setEnabled(True)
                 if hasattr(tab, 'btn_pause'):
-                    tab.btn_pause.setEnabled(self._is_unlocked)
+                    tab.btn_pause.setEnabled(True)
                 if hasattr(tab, 'btn_resume'):
-                    tab.btn_resume.setEnabled(self._is_unlocked)
+                    tab.btn_resume.setEnabled(True)
                 if hasattr(tab, 'btn_stop'):
-                    tab.btn_stop.setEnabled(self._is_unlocked)
+                    tab.btn_stop.setEnabled(True)
                 if hasattr(tab, 'btn_set_progress'):
-                    tab.btn_set_progress.setEnabled(self._is_unlocked)
+                    tab.btn_set_progress.setEnabled(True)
 
-        # Also hide main progress buttons if they exist
+        # Also enable main progress buttons if they exist
         if hasattr(self, 'btn_start'):
-            self.btn_start.setEnabled(self._is_unlocked)
+            self.btn_start.setEnabled(True)
         if hasattr(self, 'btn_pause'):
-            self.btn_pause.setEnabled(self._is_unlocked)
+            self.btn_pause.setEnabled(True)
         if hasattr(self, 'btn_resume'):
-            self.btn_resume.setEnabled(self._is_unlocked)
+            self.btn_resume.setEnabled(True)
         if hasattr(self, 'btn_stop'):
-            self.btn_stop.setEnabled(self._is_unlocked)
+            self.btn_stop.setEnabled(True)
 
     def _setup_connections(self):
         """Setup signal connections"""

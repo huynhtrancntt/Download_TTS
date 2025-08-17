@@ -33,3 +33,8 @@ def prepare_pydub_ffmpeg():
     ffprobe = which("ffprobe") or r"C:\ffmpeg\bin\ffprobe.exe"
     AudioSegment.converter = ffmpeg
     AudioSegment.ffprobe = ffprobe
+
+
+def hide_directory_on_windows(directory_path):
+    import subprocess
+    subprocess.run(['attrib', '+h', directory_path], shell=True)
