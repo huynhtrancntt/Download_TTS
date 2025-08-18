@@ -333,7 +333,6 @@ class TTSTab(UIToolbarTab):
 
         # Connect buttons for row 2
         self.btn_add_audio.clicked.connect(self.on_add_audio_file)
-        self.btn_add_video.clicked.connect(self.on_add_video_file)
         self.btn_remove_segment.clicked.connect(
             self.on_remove_selected_segment)
         self.btn_reorder.clicked.connect(self.on_reorder_segments)
@@ -341,7 +340,7 @@ class TTSTab(UIToolbarTab):
         self.btn_break_segment.clicked.connect(self.on_break_segment)
 
         # Apply style to buttons in row 2
-        for btn in (self.btn_add_audio, self.btn_add_video, self.btn_remove_segment,
+        for btn in (self.btn_add_audio, self.btn_remove_segment,
                     self.btn_reorder, self.btn_test_loop):
             btn.setStyleSheet(AppConfig.BUTTON_STYLE)
             btn.setMinimumWidth(80)
@@ -436,6 +435,10 @@ class TTSTab(UIToolbarTab):
         # Setup SegmentManager with UI components
         self.segment_manager.set_ui_components(
             self.list_segments, self.audio_player)
+            
+        # Connect SegmentManager context menu signals
+        self.segment_manager.show_segment_info.connect(self._show_segment_info_dialog)
+        # Không cần connect export_segment_audio nữa vì đã xử lý trực tiếp trong SegmentManager
         
 
 
@@ -477,6 +480,38 @@ class TTSTab(UIToolbarTab):
 
         # Đảm bảo progress bar hiển thị sau khi kết nối signals
         self._ensure_progress_visible()
+        
+    def _show_segment_info_dialog(self, index: int) -> None:
+        """Hiển thị dialog thông tin segment"""
+        try:
+            segment_info = self.segment_manager.get_segment_info(index)
+            if not segment_info:
+                QMessageBox.warning(self, "Lỗi", "Không thể lấy thông tin segment")
+                return
+                
+            # Tạo message box với thông tin chi tiết
+            info_text = f"""
+📋 **THÔNG TIN SEGMENT**
+
+🔢 **Vị trí**: {segment_info['index']}
+📁 **Tên file**: {segment_info['filename']}
+🎵 **Loại**: {segment_info['segment_type']}
+⏱️ **Thời lượng**: {segment_info['duration_formatted']}
+📊 **Kích thước**: {segment_info['file_size']}
+📍 **Vị trí trong playlist**: {segment_info['cumulative_formatted']}
+🔄 **Đường dẫn đầy đủ**: {segment_info['full_path']}
+
+{'🎬 **Video placeholder**' if segment_info['is_video'] else ''}
+{'⏸️ **Khoảng nghỉ**' if segment_info['is_gap'] else ''}
+{'✂️ **Phần được chia**' if segment_info['is_part'] else ''}
+            """.strip()
+            
+            QMessageBox.information(self, f"Thông tin Segment {segment_info['index']}", info_text)
+            
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi", f"Không thể hiển thị thông tin: {str(e)}")
+            
+
 
     def append_history(self, text: str, meta: Optional[dict] = None) -> None:
         """Add item to TTS history"""
@@ -681,47 +716,6 @@ class TTSTab(UIToolbarTab):
             error_msg = f"Không thể thêm file audio: {e}"
             QMessageBox.critical(self, "Lỗi", error_msg)
             self._add_log_item(f"❌ Lỗi thêm audio: {e}", "error")
-
-    def on_add_video_file(self) -> None:
-        """Add video file to segments list"""
-        # Choose video file
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Chọn file video để thêm", "",
-            "Video Files (*.mp4 *.avi *.mkv *.mov *.wmv);;MP4 Files (*.mp4);;AVI Files (*.avi);;All Files (*)")
-
-        if not path:
-            return
-
-        try:
-            # Use SegmentManager to add video file
-            if self.segment_manager.add_video_file(path):
-                # Update AudioPlayer
-                if self.audio_player:
-                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
-                    self.audio_player.add_segments(
-                        valid_paths, valid_durations)
-
-                    # Hiện player section khi thêm video file
-                    self._show_player_section(True)
-
-                    # Update break button state
-                    if hasattr(self, '_update_break_button_state'):
-                        current_pos = self.audio_player.get_current_position()
-                        self._update_break_button_state(current_pos)
-
-                # Success message
-                success_msg = f"✅ Đã thêm video: {os.path.basename(path)} (Tạo 3s audio)"
-                self.lbl_status.setText(success_msg)
-                self._add_log_item(
-                    f"🎬 Đã thêm file video: {os.path.basename(path)} (Tạo 3s audio)", "info")
-            else:
-                QMessageBox.warning(
-                    self, "Lỗi", "Không thể tạo audio từ file video")
-
-        except Exception as e:
-            error_msg = f"Không thể thêm file video: {e}"
-            QMessageBox.critical(self, "Lỗi", error_msg)
-            self._add_log_item(f"❌ Lỗi thêm video: {e}", "error")
 
     def on_remove_selected_segment(self) -> None:
         """Remove selected segment from list"""

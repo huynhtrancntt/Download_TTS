@@ -327,6 +327,10 @@ class AudioPlayer(QWidget):
         if not self.chk_loop.isChecked():
             return False
         
+        return self._check_current_global_pos()
+    def _check_current_global_pos(self) -> bool:
+
+        """Kiểm tra xem có nên bắt đầu loop hay không"""
         current_global_pos = self.get_global_position_ms()
         return current_global_pos >= self.total_known_ms
 
@@ -736,6 +740,11 @@ class AudioPlayer(QWidget):
                 # Không loop hoặc chưa đủ điều kiện loop
                 self.is_playing = False
                 self.btn_playpause.setText("▶️")
+                
+                print(f"check_current_global_pos: {self._check_current_global_pos()}")
+                if(self._check_current_global_pos()):
+                    self.play_segment(0, 0)
+                    self.stop()
         
         # Phát signal
         self.playback_state_changed.emit(self.is_playing)

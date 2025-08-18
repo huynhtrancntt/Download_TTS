@@ -53,6 +53,21 @@ Mỗi row sử dụng `ListRow` class với `QGridLayout` và `QSizePolicy` đ�
   - Text màu xanh lá tươi (#00ff00) với text-shadow phát sáng
   - Background labels tối (#1a1a1a) để tạo contrast
 
+### Context Menu (Chuột phải)
+
+SegmentManager hỗ trợ context menu khi chuột phải vào segments:
+
+- **📋 Xem thông tin**: Hiển thị thông tin chi tiết của segment (chỉ cho 1 item)
+- **💾 Export audio**: Xuất segment(s) ra file audio riêng
+  - Chọn 1 segment: Hiển thị dialog chọn nơi lưu file
+  - Chọn nhiều segments: Chọn thư mục đích để lưu tất cả
+- **🗑️ Xóa**: Xóa 1 hoặc nhiều segments được chọn
+
+**Chọn nhiều segments**: 
+- Giữ `Ctrl` để chọn từng segment riêng lẻ
+- Giữ `Shift` để chọn một khoảng segments
+- Chuột phải để hiển thị menu với tùy chọn xóa nhiều và export nhiều
+
 ### Sử dụng trực tiếp
 ```python
 # Thêm custom row
@@ -61,6 +76,13 @@ segment_manager.add_custom_row("03", "nam 3", "96 kb")
 # Lấy dữ liệu từ row
 row_widget = segment_manager.list_widget.itemWidget(item)
 left, center, right = row_widget.get_data()
+
+# Lấy thông tin chi tiết segment
+segment_info = segment_manager.get_segment_info(0)
+print(f"Segment: {segment_info['filename']}, Duration: {segment_info['duration_formatted']}")
+
+# Export segment audio
+success = segment_manager.export_segment_audio_file(0, "exported_segment.mp3")
 ```
 
 ### Thêm segments
@@ -107,11 +129,15 @@ print(f"Tổng thời lượng: {stats['total_duration']}ms")
 SegmentManager phát ra các signals khi có thay đổi:
 
 ```python
-# Kết nối signals
+# Kết nối signals cơ bản
 segment_manager.segments_changed.connect(self.on_segments_changed)
 segment_manager.segment_added.connect(self.on_segment_added)
 segment_manager.segment_removed.connect(self.on_segment_removed)
 segment_manager.segment_reordered.connect(self.on_segment_reordered)
+
+# Kết nối signals cho context menu
+segment_manager.show_segment_info.connect(self._show_segment_info_dialog)
+# Export audio được xử lý trực tiếp trong SegmentManager
 ```
 
 ## Lợi ích của việc tách code
