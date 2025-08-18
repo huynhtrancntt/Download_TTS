@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Core Package - Chứa các class và module cốt lõi của ứng dụng
+Core module for TTS application
 """
 
 from .audio_player import AudioPlayer, ClickSlider

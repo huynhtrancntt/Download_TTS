@@ -14,6 +14,8 @@ from typing import Optional, List
 
 # Import AudioPlayer
 from app.core.audio_player import AudioPlayer
+# Import SegmentManager
+from app.core.segment_manager import SegmentManager
 
 import os
 from datetime import datetime
@@ -58,13 +60,13 @@ class TTSTab(UIToolbarTab):
 
     def _initialize_state_variables(self) -> None:
         """Initialize state variables"""
-        self.segment_paths: List[Optional[str]] = []
-        self.segment_durations: List[Optional[int]] = []
-        self.total_known_ms: int = 0
         self.current_index: int = -1
         self.worker: Optional[MTProducerWorker] = None
         self.file_output: str = ""
         self.audio_player: Optional[AudioPlayer] = None
+
+        # Initialize SegmentManager
+        self.segment_manager = SegmentManager()
 
     def _setup_ui(self) -> None:
         """Setup UI"""
@@ -86,9 +88,6 @@ class TTSTab(UIToolbarTab):
         if getattr(self.parent_main, "status", None):
             self.parent_main.status.showMessage(
                 "TTS Tab sẵn sàng - Chức năng ngắt đoạn đã kích hoạt")
-
-        # Đảm bảo progress bar hiển thị khi TTS tab được khởi tạo
-        self._ensure_progress_visible()
 
     def _setup_history_system(self) -> None:
         """Setup history system"""
@@ -367,12 +366,12 @@ class TTSTab(UIToolbarTab):
         segments_layout.setContentsMargins(0, 0, 0, 0)
 
         # Add label for segments
-        segments_label = QLabel("📋 Danh sách Audio Segments:")
-        segments_label.setStyleSheet(
-            "font-weight: bold; color: #333; margin: 5px 0;")
-        segments_layout.addWidget(segments_label)
+        # segments_label = QLabel("📋 Danh sách Audio Segments:")
+        # segments_label.setStyleSheet(
+        #     "font-weight: bold; color: #333; margin: 5px 0;")
+        # segments_layout.addWidget(segments_label)
 
-        # Create segments list widget
+        # Create segments list widget với custom row widget
         self.list_segments = QListWidget()
         segments_layout.addWidget(self.list_segments, 1)
 
@@ -387,87 +386,7 @@ class TTSTab(UIToolbarTab):
         # Add container to content layout
         content_layout.addWidget(self.segments_container, 2)
 
-    def _format_segment_display_text(self, index: int, filename: str, duration_ms: int, cumulative_ms: int, total_ms: int) -> str:
-        """Format text hiển thị cho segment với thông tin thời gian và kích thước file chi tiết"""
-        # Lấy kích thước file
-        file_size = self._get_file_size(filename)
-        
-        # Xử lý các trường hợp đặc biệt
-        if filename.startswith("gap_"):
-            # Khoảng nghỉ
-            segment_time = ms_to_mmss(duration_ms)
-            cumulative_time = ms_to_mmss(cumulative_ms)
-            total_time = ms_to_mmss(total_ms)
-            return f"{index:03d}. [KHOẢNG NGHỈ] - {segment_time} - {cumulative_time}/{total_time} - {file_size}"
-        elif "part1_" in filename or "part2_" in filename:
-            # Phần được chia
-            original_name = filename.replace("part1_", "").replace("part2_", "")
-            part_num = "1" if "part1_" in filename else "2"
-            segment_time = ms_to_mmss(duration_ms)
-            cumulative_time = ms_to_mmss(cumulative_ms)
-            total_time = ms_to_mmss(total_ms)
-            return f"{index:03d}. {original_name} (Phần {part_num}) - {segment_time} - {cumulative_time}/{total_time} - {file_size}"
-        else:
-            # Segment thông thường
-            segment_time = ms_to_mmss(duration_ms)
-            cumulative_time = ms_to_mmss(cumulative_ms)
-            total_time = ms_to_mmss(total_ms)
-            return f"{index:03d}. {filename} - {segment_time} - {cumulative_time}/{total_time} - {file_size}"
-
-    def _get_file_size(self, filename: str) -> str:
-        """Lấy kích thước file và format thành KB/MB"""
-        try:
-            # Tìm đường dẫn đầy đủ của file
-            file_path = None
-            for path in self.segment_paths:
-                if path and os.path.basename(path) == filename:
-                    file_path = path
-                    break
-            
-            if file_path and os.path.exists(file_path):
-                size_bytes = os.path.getsize(file_path)
-                
-                # Format kích thước
-                if size_bytes < 1024:
-                    return f"{size_bytes}B"
-                elif size_bytes < 1024 * 1024:
-                    size_kb = size_bytes / 1024
-                    return f"{size_kb:.1f}KB"
-                else:
-                    size_mb = size_bytes / (1024 * 1024)
-                    return f"{size_mb:.1f}MB"
-            else:
-                return "N/A"
-        except Exception:
-            return "N/A"
-
-    def _update_segments_display(self) -> None:
-        """Cập nhật hiển thị segments với thông tin thời gian chi tiết"""
-        if not hasattr(self, 'list_segments'):
-            return
-            
-        self.list_segments.clear()
-        
-        if not self.segment_paths or not any(self.segment_paths):
-            return
-            
-        cumulative_ms = 0
-        total_ms = sum(d or 0 for d in self.segment_durations)
-        
-        for i, (path, duration) in enumerate(zip(self.segment_paths, self.segment_durations)):
-            if path and duration:
-                filename = os.path.basename(path)
-                cumulative_ms += duration
-                
-                # Tạo text hiển thị với thông tin thời gian chi tiết
-                display_text = self._format_segment_display_text(
-                    i + 1, filename, duration, cumulative_ms, total_ms
-                )
-                
-                self.list_segments.addItem(QListWidgetItem(display_text))
-            elif path is None and duration is None:
-                # Phần đang tạo
-                self.list_segments.addItem(QListWidgetItem(f"{i+1:03d}. (đang tạo...)"))
+    # Các method này đã được chuyển sang SegmentManager
 
     def _create_status_label(self, content_layout: QVBoxLayout) -> None:
         """Create status label"""
@@ -513,6 +432,12 @@ class TTSTab(UIToolbarTab):
         # Update break segment button state based on audio position
         self.audio_player.position_changed.connect(
             self._update_break_button_state)
+
+        # Setup SegmentManager with UI components
+        self.segment_manager.set_ui_components(
+            self.list_segments, self.audio_player)
+        
+
 
     def _show_player_section(self, show: bool = True) -> None:
         """Show or hide player section and segments list"""
@@ -601,56 +526,47 @@ class TTSTab(UIToolbarTab):
         try:
             self._add_log_item(
                 f"✂️ Yêu cầu cắt audio tại segment {segment_index + 1}, vị trí {ms_to_mmss(split_position_ms)}", "info")
-            
+
             # Cắt audio file
-            part1_path, part2_path = self.audio_player.split_audio_file(segment_index, split_position_ms)
-            
+            part1_path, part2_path = self.audio_player.split_audio_file(
+                segment_index, split_position_ms)
+
             if part1_path and part2_path:
-                # Cập nhật segments list trong TTS tab
-                original_duration = self.segment_durations[segment_index] or 0
-                part1_duration = split_position_ms
-                part2_duration = original_duration - split_position_ms
-                
-                # Thay thế segment cũ bằng phần 1
-                self.segment_paths[segment_index] = part1_path
-                self.segment_durations[segment_index] = part1_duration
-                
-                # Thêm phần 2 vào cuối
-                self.segment_paths.append(part2_path)
-                self.segment_durations.append(part2_duration)
-                
-                # Cập nhật tổng thời lượng
-                self.total_known_ms = sum(d or 0 for d in self.segment_durations)
-                
-                # Cập nhật AudioPlayer để đồng bộ hóa dữ liệu
-                self.audio_player.update_segments_after_split(segment_index, part1_path, part2_path, split_position_ms)
-                
-                # Cập nhật hiển thị segments
-                self._update_segments_display()
-                
-                # Cập nhật AudioPlayer với segments mới
-                valid_paths = [p for p in self.segment_paths if p]
-                valid_durations = [d for d in self.segment_durations if d]
-                self.audio_player.add_segments(valid_paths, valid_durations)
-                
-                self._add_log_item(
-                    f"✅ Đã cắt audio thành công: {os.path.basename(part1_path)} và {os.path.basename(part2_path)}", "info")
-                
-                # Hiện thông báo thành công
-                QMessageBox.information(self, "Thành công", 
-                    f"Đã cắt audio thành công!\n"
-                    f"Phần 1: {os.path.basename(part1_path)} ({ms_to_mmss(part1_duration)})\n"
-                    f"Phần 2: {os.path.basename(part2_path)} ({ms_to_mmss(part2_duration)})")
-                
-                # Cập nhật trạng thái break button
-                if hasattr(self, '_update_break_button_state'):
-                    current_pos = self.audio_player.get_current_position()
-                    self._update_break_button_state(current_pos)
-                    
+                # Sử dụng SegmentManager để cắt segment
+                if self.segment_manager.split_segment(segment_index, split_position_ms):
+                    # Cập nhật AudioPlayer để đồng bộ hóa dữ liệu
+                    self.audio_player.update_segments_after_split(
+                        segment_index, part1_path, part2_path, split_position_ms)
+
+                    # Cập nhật AudioPlayer với segments mới
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    self.audio_player.add_segments(
+                        valid_paths, valid_durations)
+
+                    self._add_log_item(
+                        f"✅ Đã cắt audio thành công: {os.path.basename(part1_path)} và {os.path.basename(part2_path)}", "info")
+
+                    # Hiện thông báo thành công
+                    part1_duration = split_position_ms
+                    part2_duration = (
+                        self.segment_manager.segment_durations[segment_index] or 0) - split_position_ms
+                    QMessageBox.information(self, "Thành công",
+                                            f"Đã cắt audio thành công!\n"
+                                            f"Phần 1: {os.path.basename(part1_path)} ({ms_to_mmss(part1_duration)})\n"
+                                            f"Phần 2: {os.path.basename(part2_path)} ({ms_to_mmss(part2_duration)})")
+
+                    # Cập nhật trạng thái break button
+                    if hasattr(self, '_update_break_button_state'):
+                        current_pos = self.audio_player.get_current_position()
+                        self._update_break_button_state(current_pos)
+                else:
+                    self._add_log_item("❌ Lỗi khi cắt segment", "error")
+                    QMessageBox.warning(self, "Lỗi", "Không thể cắt segment")
+
             else:
                 self._add_log_item("❌ Lỗi khi cắt audio file", "error")
                 QMessageBox.warning(self, "Lỗi", "Không thể cắt audio file")
-                
+
         except Exception as e:
             self._add_log_item(f"❌ Lỗi khi cắt audio: {e}", "error")
             QMessageBox.critical(self, "Lỗi", f"Lỗi khi cắt audio: {e}")
@@ -662,8 +578,8 @@ class TTSTab(UIToolbarTab):
 
         # Enable break button when we have valid position and segments
         can_break = (position_ms > 0 and
-                     self.segment_paths and
-                     any(self.segment_paths) and
+                     self.segment_manager.segment_paths and
+                     any(self.segment_manager.segment_paths) and
                      self.audio_player and
                      self.audio_player.get_total_duration() > 0)
 
@@ -735,42 +651,31 @@ class TTSTab(UIToolbarTab):
             return
 
         try:
-            # Get audio duration
-            duration_ms = get_mp3_duration_ms(path)
-            if duration_ms <= 0:
+            # Use SegmentManager to add audio file
+            if self.segment_manager.add_audio_file(path):
+                # Update AudioPlayer
+                if self.audio_player:
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    self.audio_player.add_segments(
+                        valid_paths, valid_durations)
+
+                    # Hiện player section khi thêm audio file
+                    self._show_player_section(True)
+
+                    # Update break button state
+                    if hasattr(self, '_update_break_button_state'):
+                        current_pos = self.audio_player.get_current_position()
+                        self._update_break_button_state(current_pos)
+
+                # Success message
+                duration_ms = self.segment_manager.segment_durations[-1]
+                success_msg = f"✅ Đã thêm audio: {os.path.basename(path)} ({ms_to_mmss(duration_ms)})"
+                self.lbl_status.setText(success_msg)
+                self._add_log_item(
+                    f"🎵 Đã thêm file audio: {os.path.basename(path)} ({ms_to_mmss(duration_ms)})", "info")
+            else:
                 QMessageBox.warning(
                     self, "Lỗi", "Không thể đọc được thời lượng của file audio")
-                return
-
-            # Add to list
-            self.segment_paths.append(path)
-            self.segment_durations.append(duration_ms)
-
-            # Update total duration
-            self.total_known_ms = sum(d or 0 for d in self.segment_durations)
-
-            # Update AudioPlayer
-            if self.audio_player:
-                valid_paths = [p for p in self.segment_paths if p]
-                valid_durations = [d or 0 for d in self.segment_durations]
-                self.audio_player.add_segments(valid_paths, valid_durations)
-
-                # Hiện player section khi thêm audio file
-                self._show_player_section(True)
-
-                # Update break button state
-                if hasattr(self, '_update_break_button_state'):
-                    current_pos = self.audio_player.get_current_position()
-                    self._update_break_button_state(current_pos)
-
-            # Update segments display with detailed time information
-            self._update_segments_display()
-
-            # Success message
-            success_msg = f"✅ Đã thêm audio: {os.path.basename(path)} ({ms_to_mmss(duration_ms)})"
-            self.lbl_status.setText(success_msg)
-            self._add_log_item(
-                f"🎵 Đã thêm file audio: {os.path.basename(path)} ({ms_to_mmss(duration_ms)})", "info")
 
         except Exception as e:
             error_msg = f"Không thể thêm file audio: {e}"
@@ -788,54 +693,30 @@ class TTSTab(UIToolbarTab):
             return
 
         try:
-            # For video files, we'll create a 3-second audio segment
-            # This simulates extracting audio from video
-            duration_ms = 3000  # Fixed 3 seconds as requested
+            # Use SegmentManager to add video file
+            if self.segment_manager.add_video_file(path):
+                # Update AudioPlayer
+                if self.audio_player:
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    self.audio_player.add_segments(
+                        valid_paths, valid_durations)
 
-            # Create a silent audio segment for video (placeholder)
-            # In a real implementation, you would extract audio from video here
-            temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Ẩn thư mục tạm sau khi tạo (chỉ trên Windows)
-            hide_directory_on_windows(temp_dir)
+                    # Hiện player section khi thêm video file
+                    self._show_player_section(True)
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            video_audio_path = str(temp_dir / f"video_audio_{timestamp}.mp3")
+                    # Update break button state
+                    if hasattr(self, '_update_break_button_state'):
+                        current_pos = self.audio_player.get_current_position()
+                        self._update_break_button_state(current_pos)
 
-            # Create silent audio for video (3 seconds)
-            video_audio = AudioSegment.silent(duration=duration_ms)
-            video_audio.export(video_audio_path, format="mp3")
-
-            # Add to list
-            self.segment_paths.append(video_audio_path)
-            self.segment_durations.append(duration_ms)
-
-            # Update total duration
-            self.total_known_ms = sum(d or 0 for d in self.segment_durations)
-
-            # Update AudioPlayer
-            if self.audio_player:
-                valid_paths = [p for p in self.segment_paths if p]
-                valid_durations = [d or 0 for d in self.segment_durations]
-                self.audio_player.add_segments(valid_paths, valid_durations)
-
-                # Hiện player section khi thêm video file
-                self._show_player_section(True)
-
-                # Update break button state
-                if hasattr(self, '_update_break_button_state'):
-                    current_pos = self.audio_player.get_current_position()
-                    self._update_break_button_state(current_pos)
-
-            # Update segments display with detailed time information
-            self._update_segments_display()
-
-            # Success message
-            success_msg = f"✅ Đã thêm video: {os.path.basename(path)} (Tạo 3s audio)"
-            self.lbl_status.setText(success_msg)
-            self._add_log_item(
-                f"🎬 Đã thêm file video: {os.path.basename(path)} (Tạo 3s audio)", "info")
+                # Success message
+                success_msg = f"✅ Đã thêm video: {os.path.basename(path)} (Tạo 3s audio)"
+                self.lbl_status.setText(success_msg)
+                self._add_log_item(
+                    f"🎬 Đã thêm file video: {os.path.basename(path)} (Tạo 3s audio)", "info")
+            else:
+                QMessageBox.warning(
+                    self, "Lỗi", "Không thể tạo audio từ file video")
 
         except Exception as e:
             error_msg = f"Không thể thêm file video: {e}"
@@ -850,13 +731,13 @@ class TTSTab(UIToolbarTab):
                 self, "Thông báo", "Vui lòng chọn segment cần xóa")
             return
 
-        if current_row >= len(self.segment_paths):
+        if current_row >= len(self.segment_manager.segment_paths):
             QMessageBox.warning(self, "Lỗi", "Segment không hợp lệ")
             return
 
         # Confirm deletion
         segment_name = os.path.basename(
-            self.segment_paths[current_row]) if self.segment_paths[current_row] else f"Segment {current_row + 1}"
+            self.segment_manager.segment_paths[current_row]) if self.segment_manager.segment_paths[current_row] else f"Segment {current_row + 1}"
         reply = QMessageBox.question(
             self, "Xác nhận xóa",
             f"Bạn có chắc muốn xóa segment:\n{segment_name}?",
@@ -866,43 +747,36 @@ class TTSTab(UIToolbarTab):
 
         if reply == QMessageBox.Yes:
             try:
-                # Remove segment
-                removed_path = self.segment_paths.pop(current_row)
-                removed_duration = self.segment_durations.pop(current_row)
+                # Use SegmentManager to remove segment
+                removed_path, removed_duration = self.segment_manager.remove_segment(
+                    current_row)
 
-                # Remove from list widget
-                self.list_segments.takeItem(current_row)
-
-                # Update total duration
-                self.total_known_ms = sum(
-                    d or 0 for d in self.segment_durations)
-
-                # Update AudioPlayer
-                if self.audio_player:
-                    valid_paths = [p for p in self.segment_paths if p]
-                    valid_durations = [d for d in self.segment_durations if d]
-                    self.audio_player.add_segments(
-                        valid_paths, valid_durations)
-
-                # If playing deleted segment, stop playback
-                if self.current_index == current_row:
+                if removed_path and removed_duration:
+                    # Update AudioPlayer
                     if self.audio_player:
-                        self.audio_player.stop()
-                    self.current_index = -1
-                elif self.current_index > current_row:
-                    # Adjust current_index if needed
-                    self.current_index -= 1
+                        valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                        self.audio_player.add_segments(
+                            valid_paths, valid_durations)
 
-                # Update break button state
-                if hasattr(self, '_update_break_button_state'):
-                    current_pos = self.audio_player.get_current_position()
-                    self._update_break_button_state(current_pos)
+                    # If playing deleted segment, stop playback
+                    if self.current_index == current_row:
+                        if self.audio_player:
+                            self.audio_player.stop()
+                        self.current_index = -1
+                    elif self.current_index > current_row:
+                        # Adjust current_index if needed
+                        self.current_index -= 1
 
-                # Success message
-                success_msg = f"🗑️ Đã xóa segment: {os.path.basename(removed_path)}"
-                self.lbl_status.setText(success_msg)
-                self._add_log_item(
-                    f"🗑️ Đã xóa segment: {os.path.basename(removed_path)}", "info")
+                    # Update break button state
+                    if hasattr(self, '_update_break_button_state'):
+                        current_pos = self.audio_player.get_current_position()
+                        self._update_break_button_state(current_pos)
+
+                    # Success message
+                    success_msg = f"🗑️ Đã xóa segment: {os.path.basename(removed_path)}"
+                    self.lbl_status.setText(success_msg)
+                    self._add_log_item(
+                        f"🗑️ Đã xóa segment: {os.path.basename(removed_path)}", "info")
 
             except Exception as e:
                 error_msg = f"Không thể xóa segment: {e}"
@@ -911,7 +785,7 @@ class TTSTab(UIToolbarTab):
 
     def on_reorder_segments(self) -> None:
         """Reorder segments"""
-        if len(self.segment_paths) < 2:
+        if len(self.segment_manager.segment_paths) < 2:
             QMessageBox.information(
                 self, "Thông báo", "Cần ít nhất 2 segments để sắp xếp")
             return
@@ -935,7 +809,7 @@ class TTSTab(UIToolbarTab):
             reorder_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
 
             # Add all segments to list
-            for i, (path, duration) in enumerate(zip(self.segment_paths, self.segment_durations)):
+            for i, (path, duration) in enumerate(zip(self.segment_manager.segment_paths, self.segment_manager.segment_durations)):
                 if path and duration:
                     item_text = f"{i+1:02d}. {os.path.basename(path)} — {ms_to_mmss(duration)}"
                     item = QListWidgetItem(item_text)
@@ -965,36 +839,23 @@ class TTSTab(UIToolbarTab):
                     original_index = item.data(Qt.UserRole)
                     new_order.append(original_index)
 
-                # Reorder segments
-                new_paths = [self.segment_paths[i] for i in new_order]
-                new_durations = [self.segment_durations[i] for i in new_order]
+                # Use SegmentManager to reorder segments
+                if self.segment_manager.reorder_segments(new_order):
+                    # Update AudioPlayer
+                    if self.audio_player:
+                        valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                        self.audio_player.add_segments(
+                            valid_paths, valid_durations)
 
-                # Update lists
-                self.segment_paths = new_paths
-                self.segment_durations = new_durations
+                    # Update break button state
+                    if hasattr(self, '_update_break_button_state'):
+                        current_pos = self.audio_player.get_current_position()
+                        self._update_break_button_state(current_pos)
 
-                # Update total duration
-                self.total_known_ms = sum(
-                    d or 0 for d in self.segment_durations)
-
-                # Update AudioPlayer
-                if self.audio_player:
-                    valid_paths = [p for p in self.segment_paths if p]
-                    valid_durations = [d for d in self.segment_durations if d]
-                    self.audio_player.add_segments(
-                        valid_paths, valid_durations)
-
-                # Update segments display with detailed time information
-                self._update_segments_display()
-
-                # Update break button state
-                if hasattr(self, '_update_break_button_state'):
-                    current_pos = self.audio_player.get_current_position()
-                    self._update_break_button_state(current_pos)
-
-                # Success message
-                self.lbl_status.setText("🔄 Đã sắp xếp lại segments")
-                self._add_log_item("🔄 Đã sắp xếp lại thứ tự segments", "info")
+                    # Success message
+                    self.lbl_status.setText("🔄 Đã sắp xếp lại segments")
+                    self._add_log_item(
+                        "🔄 Đã sắp xếp lại thứ tự segments", "info")
 
         except Exception as e:
             error_msg = f"Không thể sắp xếp segments: {e}"
@@ -1005,7 +866,7 @@ class TTSTab(UIToolbarTab):
         """Handle segment break button click"""
         try:
             # Check if we have segments
-            if not self.segment_paths or not any(self.segment_paths):
+            if not self.segment_manager.segment_paths or not any(self.segment_manager.segment_paths):
                 QMessageBox.warning(
                     self, "Lỗi", "Không có segments để ngắt đoạn")
                 return
@@ -1032,12 +893,12 @@ class TTSTab(UIToolbarTab):
             segment_duration = 0
             segment_path = ""
 
-            for i, duration in enumerate(self.segment_durations):
+            for i, duration in enumerate(self.segment_manager.segment_durations):
                 if duration:
                     if segment_start <= current_pos < segment_start + duration:
                         segment_index = i
                         segment_duration = duration
-                        segment_path = self.segment_paths[i]
+                        segment_path = self.segment_manager.segment_paths[i]
                         break
                     segment_start += duration
 
@@ -1074,7 +935,7 @@ class TTSTab(UIToolbarTab):
             # Confirm break operation
             reply = QMessageBox.question(
                 self, "Xác nhận ngắt đoạn",
-                f"Tạo khoảng nghỉ {break_seconds}s {break_position} segment?\n"
+                f"Tạo khoảng nghỉ {break_seconds}s khoảng nghỉ {break_position} segment?\n"
                 f"Segment: {os.path.basename(segment_path)}\n"
                 f"Vị trí: {ms_to_mmss(current_pos)} ({break_position} segment)",
                 QMessageBox.Yes | QMessageBox.No,
@@ -1098,112 +959,44 @@ class TTSTab(UIToolbarTab):
                                segment_duration: int, break_ms: int, insert_index: int, break_position: str) -> None:
         """Perform the actual segment break operation"""
         try:
-            # Create silent gap with specified duration
-            gap = AudioSegment.silent(duration=break_ms)
+            # Use SegmentManager to add gap segment
+            if self.segment_manager.add_gap_segment(break_ms, insert_index, break_position):
+                # Update AudioPlayer
+                if self.audio_player:
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    self.audio_player.add_segments(
+                        valid_paths, valid_durations)
 
-            # Create temporary file for gap only
-            temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Ẩn thư mục tạm sau khi tạo (chỉ trên Windows)
-            hide_directory_on_windows(temp_dir)
+                # Update break button state
+                if hasattr(self, '_update_break_button_state'):
+                    current_pos = self.audio_player.get_current_position()
+                    self._update_break_button_state(current_pos)
 
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            gap_path = str(temp_dir / f"gap_{timestamp}.mp3")
+                # Success message
+                break_seconds = break_ms / 1000
+                success_msg = f"Đã ngắt đoạn thành công!\nTạo {break_seconds}s khoảng nghỉ {break_position} segment.\nAudio gốc được giữ nguyên."
+                QMessageBox.information(self, "Thành công", success_msg)
 
-            # Export gap
-            gap.export(gap_path, format="mp3")
+                # Update status
+                status_msg = f"✂️ Đã ngắt đoạn tại {ms_to_mmss(self.audio_player.get_current_position())} - Tạo {break_seconds}s khoảng nghỉ"
+                self.lbl_status.setText(status_msg)
 
-            # Update segments list - insert gap after current segment
-            # Keep original segment unchanged
-            if break_position == "trước":
-                self.segment_paths.insert(segment_index, gap_path)
-                self.segment_durations.insert(segment_index, break_ms)
-            else:  # break_position == "sau"
-                self.segment_paths.insert(insert_index, gap_path)
-                self.segment_durations.insert(insert_index, break_ms)
-
-            # Update total duration
-            self.total_known_ms = sum(d or 0 for d in self.segment_durations)
-
-            # Update AudioPlayer
-            if self.audio_player:
-                valid_paths = [p for p in self.segment_paths if p]
-                valid_durations = [d or 0 for d in self.segment_durations]
-                self.audio_player.add_segments(valid_paths, valid_durations)
-
-            # Update list widget
-            self._update_segments_list_after_break_simple(
-                segment_index, gap_path, break_ms, break_position)
-
-            # Update break button state
-            if hasattr(self, '_update_break_button_state'):
-                current_pos = self.audio_player.get_current_position()
-                self._update_break_button_state(current_pos)
-
-            # Success message
-            break_seconds = break_ms / 1000
-            success_msg = f"Đã ngắt đoạn thành công!\nTạo {break_seconds}s khoảng nghỉ {break_position} segment.\nAudio gốc được giữ nguyên."
-            QMessageBox.information(self, "Thành công", success_msg)
-
-            # Update status
-            status_msg = f"✂️ Đã ngắt đoạn tại {ms_to_mmss(self.audio_player.get_current_position())} - Tạo {break_seconds}s khoảng nghỉ"
-            self.lbl_status.setText(status_msg)
-
-            # Log success
-            self._add_log_item(
-                f"✂️ Đã ngắt đoạn thành công! Tạo {break_seconds}s khoảng nghỉ {break_position} segment", "info")
+                # Log success
+                self._add_log_item(
+                    f"✂️ Đã ngắt đoạn thành công! Tạo {break_seconds}s khoảng nghỉ {break_position} segment", "info")
+            else:
+                raise Exception("Không thể tạo gap segment")
 
         except Exception as e:
             error_msg = f"Không thể thực hiện ngắt đoạn: {e}"
             QMessageBox.critical(self, "Lỗi", error_msg)
             self._add_log_item(f"❌ Lỗi thực hiện ngắt đoạn: {e}", "error")
 
-    def _update_segments_list_after_break(self, segment_index: int, part1_path: str,
-                                          gap_path: str, part2_path: str) -> None:
-        """Update segments list widget after breaking a segment"""
-        # Clear current list
-        self.list_segments.clear()
-
-        # Rebuild list with new segments
-        for i, (path, duration) in enumerate(zip(self.segment_paths, self.segment_durations)):
-            if path and duration:
-                if path == gap_path:
-                    # Special display for gap
-                    line = f"{i+1:03d}. [KHOẢNG NGHỈ]  —  {ms_to_mmss(duration)}"
-                else:
-                    # Regular segment
-                    filename = os.path.basename(path)
-                    if "part1_" in filename or "part2_" in filename:
-                        # Mark as broken segment
-                        original_name = os.path.basename(
-                            self.segment_paths[segment_index - 1 if i > segment_index else segment_index + 2])
-                        # Update segments display with detailed time information
-                        self._update_segments_display()
-
-    def _update_segments_list_after_break_simple(self, segment_index: int, gap_path: str, break_ms: int, break_position: str) -> None:
-        """Update segments list widget after breaking a segment (simple case)"""
-        # Clear current list
-        self.list_segments.clear()
-
-        # Rebuild list with new segments
-        for i, (path, duration) in enumerate(zip(self.segment_paths, self.segment_durations)):
-            if path and duration:
-                if path == gap_path:
-                    # Special display for gap
-                    break_seconds = break_ms / 1000
-                    line = f"{i+1:03d}. [KHOẢNG NGHỈ]  —  {ms_to_mmss(duration)}"
-                else:
-                    # Regular segment - keep original name
-                    filename = os.path.basename(path)
-                    if (filename.startswith("gap_")):
-                        line = f"{i+1:03d}. [KHOẢNG NGHỈ]  —  {ms_to_mmss(duration)}"
-                    # Update segments display with detailed time information
-                    self._update_segments_display()
+    # Các method này đã được chuyển sang SegmentManager
 
     def on_test_loop(self) -> None:
         """Test loop condition manually"""
-        if not self.segment_paths or not any(self.segment_paths):
+        if not self.segment_manager.segment_paths or not any(self.segment_manager.segment_paths):
             QMessageBox.information(
                 self, "Thông báo", "Chưa có segments để test loop")
             return
@@ -1217,7 +1010,7 @@ class TTSTab(UIToolbarTab):
             total_dur = self.audio_player.get_total_duration()
         else:
             current_pos = 0
-            total_dur = self.total_known_ms
+            total_dur = self.segment_manager.total_known_ms
 
         info_text = f"🔍 Loop Test Results:\n\n"
         info_text += f"Current Position: {current_pos}ms ({ms_to_mmss(current_pos)})\n"
@@ -1258,12 +1051,9 @@ class TTSTab(UIToolbarTab):
             self.audio_player.clear_segments()
 
         clean_all_temp_parts()
-        # Reset segments list
-        self.segment_paths.clear()
-        self.segment_durations.clear()
-        self.total_known_ms = 0
+        # Reset segments list using SegmentManager
+        self.segment_manager.clear_segments()
         self.current_index = -1
-        self.list_segments.clear()
         # Reset progress bar từ main window và hiện lên
         self._reset_progress()
         self._update_progress_title("Tiến trình xử lý")
@@ -1351,12 +1141,9 @@ class TTSTab(UIToolbarTab):
                 print(
                     f"Warning: Error stopping audio player in on_end_all: {e}")
 
-        # Clear segments list
-        self.segment_paths.clear()
-        self.segment_durations.clear()
-        self.total_known_ms = 0
+        # Clear segments list using SegmentManager
+        self.segment_manager.clear_segments()
         self.current_index = -1
-        self.list_segments.clear()
 
         # Reset break segment controls
         if hasattr(self, 'cmb_break_duration'):
@@ -1381,22 +1168,18 @@ class TTSTab(UIToolbarTab):
     def on_segment_ready(self, path: str, duration_ms: int, index1: int) -> None:
         """Callback when audio segment is ready"""
         self._ensure_capacity(index1)
-        self.segment_paths[index1 - 1] = path
-        self.segment_durations[index1 - 1] = duration_ms
+        self.segment_manager.segment_paths[index1 - 1] = path
+        self.segment_manager.segment_durations[index1 - 1] = duration_ms
 
         # Update total duration
-        self.total_known_ms = sum(d or 0 for d in self.segment_durations)
-
-        # Create display text for segment
-        line = f"{index1:03d}. {os.path.basename(path)}  —  {ms_to_mmss(duration_ms)}"
+        self.segment_manager._update_total_duration()
 
         # Update segments display with detailed time information
-        self._update_segments_display()
+        self.segment_manager._update_display()
 
         # Update AudioPlayer
         if self.audio_player:
-            valid_paths = [p for p in self.segment_paths if p]
-            valid_durations = [d for d in self.segment_durations if d]
+            valid_paths, valid_durations = self.segment_manager.get_valid_segments()
             self.audio_player.add_segments(valid_paths, valid_durations)
 
             # Hiện player section khi có segment đầu tiên
@@ -1409,17 +1192,17 @@ class TTSTab(UIToolbarTab):
                 self._update_break_button_state(current_pos)
 
         # Auto-play first segment if nothing is playing
-        if self.current_index < 0 and self.segment_paths and self.segment_paths[0]:
+        if self.current_index < 0 and self.segment_manager.segment_paths and self.segment_manager.segment_paths[0]:
             if self.audio_player:
                 self.audio_player.play()
                 self._add_log_item(
-                    f"▶️ Tự động phát segment đầu tiên: {os.path.basename(self.segment_paths[0])}", "blue")
+                    f"▶️ Tự động phát segment đầu tiên: {os.path.basename(self.segment_manager.segment_paths[0])}", "blue")
 
     def _ensure_capacity(self, n: int) -> None:
         """Ensure segments list has enough capacity"""
-        while len(self.segment_paths) < n:
-            self.segment_paths.append(None)
-            self.segment_durations.append(None)
+        while len(self.segment_manager.segment_paths) < n:
+            self.segment_manager.segment_paths.append(None)
+            self.segment_manager.segment_durations.append(None)
 
     def on_produce_progress(self, emitted: int, total: int) -> None:
         """Callback for processing progress"""
@@ -1432,9 +1215,11 @@ class TTSTab(UIToolbarTab):
 
     def on_all_done(self) -> None:
         """Callback when all processing is done"""
-        self.lbl_status.setText(self.lbl_status.text() + "  ✅ Xong.")
+        self.lbl_status.setText(self.lbl_status.text())
         self.btn_start_edge_tts.setEnabled(True)
         self.btn_end_edge_tts.setEnabled(False)
+        self._update_progress_title("")
+        self._reset_progress()
 
         # Log completion
         self._add_log_item("✅ TTS hoàn thành tất cả segments", "info")
@@ -1454,29 +1239,6 @@ class TTSTab(UIToolbarTab):
             # Try to access main window's output_list
             if hasattr(self.parent_main, '_add_log_item'):
                 self.parent_main._add_log_item(message, level)
-            elif hasattr(self.parent_main, 'output_list') and self.parent_main.output_list:
-                # Direct access to output_list
-                from PySide6.QtWidgets import QListWidgetItem
-                from PySide6.QtCore import QTime
-                from PySide6.QtGui import QColor
-
-                current_time = QTime.currentTime().toString("HH:mm:ss")
-                log_message = f"[TTS] [{current_time}] {message}"
-                item = QListWidgetItem(log_message)
-
-                if level == "info":
-                    item.setForeground(QColor("#05df60"))
-                elif level == "warning":
-                    item.setForeground(QColor("orange"))
-                elif level == "error":
-                    item.setForeground(QColor("red"))
-                elif level == "blue":
-                    item.setForeground(QColor("#4a5568"))
-                else:
-                    item.setForeground(QColor("#4a5568"))
-
-                self.parent_main.output_list.addItem(item)
-                self.parent_main.output_list.scrollToBottom()
         except Exception as e:
             # Fallback to print if logging fails
             print(f"[TTS LOG ERROR] {e}")
@@ -1527,73 +1289,43 @@ class TTSTab(UIToolbarTab):
 
     def _print_segments_info(self) -> None:
         """Print detailed information about all segments"""
-        if not self.segment_durations or not any(self.segment_durations):
+        if not self.segment_manager.segment_durations or not any(self.segment_manager.segment_durations):
             self._add_log_item("📋 Không có segments để hiển thị", "warning")
             return
 
         # Log segments information
         self._add_log_item("📋 Thông tin chi tiết Segments:", "info")
 
-        total_duration = 0
-        cumulative_time = 0
-
-        for i, (path, duration) in enumerate(zip(self.segment_paths, self.segment_durations)):
-            if duration:
-                segment_start = cumulative_time
-                segment_end = cumulative_time + duration
-                filename = os.path.basename(path) if path else "No path"
-
-                # Check segment type
-                segment_type = ""
-                if "Thêm thủ công" in self.list_segments.item(i).text():
-                    segment_type = " (Thêm thủ công)"
-                elif "gap_" in path:
-                    segment_type = " (KHOẢNG NGHỈ)"
-                elif "part1_" in path or "part2_" in path:
-                    segment_type = " (Đoạn đã ngắt)"
-
-                # Log segment info
-                log_msg = f"  [{i:02d}] {filename}{segment_type} - {ms_to_mmss(duration)}"
-                self._add_log_item(log_msg, "blue")
-
-                total_duration += duration
-                cumulative_time += duration
+        # Use SegmentManager to get statistics
+        stats = self.segment_manager.get_segments_statistics()
 
         # Log summary
         self._add_log_item(
-            f"📊 Tổng thời lượng: {ms_to_mmss(total_duration)}", "info")
+            f"📊 Tổng thời lượng: {ms_to_mmss(stats['total_duration'])}", "info")
         self._add_log_item(
-            f"📊 Tổng segments: {len([d for d in self.segment_durations if d])}", "info")
+            f"📊 Tổng segments: {stats['total_segments']}", "info")
 
         # Additional statistics
-        manual_count = sum(1 for i in range(self.list_segments.count())
-                           if "Thêm thủ công" in self.list_segments.item(i).text())
-        gap_count = sum(1 for p in self.segment_paths if p and "gap_" in p)
-        broken_count = sum(1 for p in self.segment_paths if p and (
-            "part1_" in p or "part2_" in p))
-        tts_count = len([d for d in self.segment_durations if d]
-                        ) - manual_count - gap_count
-
-        self._add_log_item(f"📊 TTS segments: {tts_count}", "blue")
-        self._add_log_item(f"📊 Manual audio: {manual_count}", "blue")
-        self._add_log_item(f"📊 Gap segments: {gap_count}", "blue")
-        self._add_log_item(f"📊 Broken segments: {broken_count}", "blue")
+        self._add_log_item(f"📊 TTS segments: {stats['tts_count']}", "blue")
+        self._add_log_item(f"📊 Gap segments: {stats['gap_count']}", "blue")
+        self._add_log_item(
+            f"📊 Broken segments: {stats['broken_count']}", "blue")
 
     def on_list_item_double_clicked(self, item) -> None:
         """Callback when double-clicking list item"""
         row = self.list_segments.row(item)
-        if 0 <= row < len(self.segment_paths) and self.segment_paths[row]:
+        if 0 <= row < len(self.segment_manager.segment_paths) and self.segment_manager.segment_paths[row]:
             if self.audio_player:
                 # Calculate global position for this segment
                 global_offset = sum((d or 0)
-                                    for d in self.segment_durations[:row])
+                                    for d in self.segment_manager.segment_durations[:row])
                 self.audio_player.seek_to(global_offset)
 
     # ==================== Export MP3 ====================
 
     def on_export_mp3(self) -> None:
         """Export MP3 from segments with proper gap handling"""
-        parts = [p for p in self.segment_paths if p]
+        parts = [p for p in self.segment_manager.segment_paths if p]
         if not parts:
             QMessageBox.information(
                 self, "Chưa có dữ liệu", "Chưa có đoạn nào để xuất.")
