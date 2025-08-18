@@ -5,7 +5,7 @@ Segment Manager - Quản lý audio segments cho TTS Tab
 
 from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMessageBox, QWidget, QHBoxLayout, QLabel, QGridLayout, QSizePolicy, QMenu
 from PySide6.QtGui import QAction
-from PySide6.QtCore import QObject, Signal, Qt
+from PySide6.QtCore import QObject, Signal, Qt, QTimer
 from typing import List, Optional, Tuple
 import os
 from pathlib import Path
@@ -15,7 +15,7 @@ from datetime import datetime
 from app.appConfig import AppConfig
 from app.utils.audio_helpers import ms_to_mmss, get_mp3_duration_ms
 from app.utils.helps import hide_directory_on_windows
-from pydub import AudioSegment
+from pydub import AudioSegment  # type: ignore
 
 
 class ListRow(QWidget):
@@ -105,6 +105,8 @@ class SegmentManager(QObject):
 		# UI components (sẽ được set từ TTS Tab)
 		self.list_widget: Optional[QListWidget] = None
 		self.audio_player = None
+		# Debounce timer for display updates to avoid UI freeze when many segments update rapidly
+		self._update_timer: Optional[QTimer] = None
 		
 	def set_ui_components(self, list_widget: QListWidget, audio_player) -> None:
 		"""Set UI components từ TTS Tab"""
@@ -168,6 +170,14 @@ class SegmentManager(QObject):
 			context_menu.addAction(info_action)
 			context_menu.addSeparator()
 		
+		# Action: Gộp segments (chỉ hiển thị khi chọn từ 2 item trở lên)
+		if len(selected_rows) >= 2:
+			merge_text = f"🔗 Gộp {len(selected_rows)} segments thành 1"
+			merge_action = QAction(merge_text, context_menu)
+			merge_action.triggered.connect(lambda: self._merge_selected_segments(selected_rows))
+			context_menu.addAction(merge_action)
+			context_menu.addSeparator()
+		
 		# Action 2: Export audio (cho 1 hoặc nhiều item)
 		if len(selected_rows) == 1:
 			export_text = "💾 Export audio"
@@ -191,6 +201,88 @@ class SegmentManager(QObject):
 		
 		# Hiển thị menu tại vị trí chuột
 		context_menu.exec(self.list_widget.mapToGlobal(position))
+		
+	def _merge_selected_segments(self, selected_rows: list) -> None:
+		"""Gộp các segments đã chọn (>=2) thành 1 segment.
+		- Kết quả sẽ thay thế vào vị trí của segment đầu tiên trong danh sách chọn
+		- Những segment còn lại sẽ bị xóa
+		"""
+		try:
+			if not selected_rows or len(selected_rows) < 2:
+				return
+			
+			# Xác nhận
+			first_idx = selected_rows[0]
+			last_idx = selected_rows[-1]
+			msg = (
+				f"Bạn có chắc muốn gộp {len(selected_rows)} segments đã chọn thành 1 không?\n\n"
+				f"Phạm vi: {first_idx + 1} → {last_idx + 1}"
+			)
+			reply = QMessageBox.question(
+				None, "Xác nhận gộp", msg,
+				QMessageBox.Yes | QMessageBox.No,
+				QMessageBox.No
+			)
+			if reply != QMessageBox.Yes:
+				return
+			
+			# Thu thập các file hợp lệ theo thứ tự tăng dần
+			merge_paths = []
+			total_duration_ms = 0
+			for idx in selected_rows:
+				if 0 <= idx < len(self.segment_paths):
+					p = self.segment_paths[idx]
+					d = self.segment_durations[idx]
+					if p and os.path.exists(p) and d and d > 0:
+						merge_paths.append(p)
+						total_duration_ms += d
+					else:
+						QMessageBox.warning(None, "Không hợp lệ", f"Segment {idx + 1} không hợp lệ, không thể gộp.")
+						return
+			
+			if len(merge_paths) < 2:
+				QMessageBox.warning(None, "Không đủ dữ liệu", "Cần chọn ít nhất 2 segments hợp lệ để gộp.")
+				return
+			
+			# Tạo audio gộp bằng pydub
+			final_audio = AudioSegment.silent(duration=0)
+			for p in merge_paths:
+				seg = AudioSegment.from_file(p)
+				final_audio += seg
+			
+			# Tạo file tạm cho kết quả gộp
+			temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
+			temp_dir.mkdir(parents=True, exist_ok=True)
+			hide_directory_on_windows(temp_dir)
+			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+			merged_path = str(temp_dir / f"merged_{timestamp}.mp3")
+			final_audio.export(merged_path, format="mp3")
+			
+			# Lấy thời lượng chính xác sau khi export
+			merged_duration = get_mp3_duration_ms(merged_path) or total_duration_ms
+			
+			# Cập nhật danh sách:
+			# - Thay thế segment đầu tiên trong selection bằng file gộp
+			# - Xóa các segment còn lại (xóa từ cuối để không lệch index)
+			first_row = selected_rows[0]
+			self.segment_paths[first_row] = merged_path
+			self.segment_durations[first_row] = merged_duration
+			
+			for idx in reversed(selected_rows[1:]):
+				if 0 <= idx < len(self.segment_paths):
+					self.segment_paths.pop(idx)
+					self.segment_durations.pop(idx)
+			
+			# Cập nhật hiển thị và phát tín hiệu
+			self._update_total_duration()
+			self._update_display()
+			self.segments_changed.emit()
+			
+			QMessageBox.information(None, "Thành công", f"Đã gộp {len(selected_rows)} segments thành 1.")
+			
+		except Exception as e:
+			QMessageBox.critical(None, "Lỗi", f"Lỗi khi gộp segments: {str(e)}")
+			return
 		
 	def _export_selected_segments(self, selected_rows: list) -> None:
 		"""Export các segments được chọn"""
@@ -595,7 +687,6 @@ class SegmentManager(QObject):
 				item.setSizeHint(row_widget.sizeHint())
 				self.list_widget.addItem(item)
 				self.list_widget.setItemWidget(item, row_widget)
-				
 			elif path is None and duration is None:
 				# Phần đang tạo
 				row_widget = self._create_loading_row_widget(i + 1)
@@ -603,13 +694,26 @@ class SegmentManager(QObject):
 				item.setSizeHint(row_widget.sizeHint())
 				self.list_widget.addItem(item)
 				self.list_widget.setItemWidget(item, row_widget)
+
+	def schedule_display_update(self, delay_ms: int = 120) -> None:
+		"""Debounce cập nhật hiển thị để tránh rebuild danh sách liên tục."""
+		if not self.list_widget:
+			return
+		if self._update_timer is None:
+			self._update_timer = QTimer()
+			self._update_timer.setSingleShot(True)
+			self._update_timer.timeout.connect(self._update_display)
+		self._update_timer.start(max(0, int(delay_ms)))
 				
 	def _create_segment_row_widget(self, index: int, filename: str, duration_ms: int, 
 								  cumulative_ms: int, total_ms: int, file_path: str) -> QWidget:
 		"""Tạo custom row widget cho segment với 3 cột"""
 		# Format text cho 3 cột
 		left_text = self._format_segment_name(index, filename, duration_ms)
-		center_text = f"{ms_to_mmss(cumulative_ms)}-{ms_to_mmss(total_ms)}"
+		# Hiển thị thời gian theo dạng: start->end/total với định dạng m:ss
+		start_ms = max(0, (cumulative_ms or 0) - (duration_ms or 0))
+		end_ms = cumulative_ms or 0
+		center_text = f"{self._format_m_ss(start_ms)}-{self._format_m_ss(end_ms)}/{self._format_m_ss(total_ms or 0)}"
 		right_text = self._get_file_size(file_path)
 		
 		# Tạo ListRow widget
@@ -642,31 +746,17 @@ class SegmentManager(QObject):
 			# Segment thông thường
 			segment_time = ms_to_mmss(duration_ms)
 			return f"{index:03d}. {filename} — {segment_time}"
+	
+	def _format_m_ss(self, ms: int) -> str:
+		"""Format thời gian kiểu m:ss (phút không padding, giây 2 chữ số)."""
+		if ms is None or ms < 0:
+			ms = 0
+		seconds_total = ms // 1000
+		minutes = seconds_total // 60
+		seconds = seconds_total % 60
+		return f"{minutes}:{seconds:02d}"
 				
-	def _format_segment_display_text(self, index: int, filename: str, duration_ms: int, cumulative_ms: int, total_ms: int) -> str:
-		"""Format text hiển thị cho segment với thông tin thời gian và kích thước file chi tiết"""
-		# Xử lý các trường hợp đặc biệt
-		if filename.startswith("gap_"):
-			# Khoảng nghỉ
-			segment_time = ms_to_mmss(duration_ms)
-			cumulative_time = ms_to_mmss(cumulative_ms)
-			total_time = ms_to_mmss(total_ms)
-			return f"{index:03d}. [KHOẢNG NGHỈ] - {segment_time} - {cumulative_time}/{total_time}"
-		elif "part1_" in filename or "part2_" in filename:
-			# Phần được chia
-			original_name = filename.replace("part1_", "").replace("part2_", "")
-			part_num = "1" if "part1_" in filename else "2"
-			segment_time = ms_to_mmss(duration_ms)
-			cumulative_time = ms_to_mmss(cumulative_ms)
-			total_time = ms_to_mmss(total_ms)
-			return f"{index:03d}. {original_name} (Phần {part_num}) - {segment_time} - {cumulative_time}/{total_time}"
-		else:
-			# Segment thông thường
-			segment_time = ms_to_mmss(duration_ms)
-			cumulative_time = ms_to_mmss(cumulative_ms)
-			total_time = ms_to_mmss(total_ms)
-			return f"{index:03d}. {filename} - {segment_time} - {cumulative_time}/{total_time}"
-			
+	
 	def _get_file_size(self, file_path: str) -> str:
 		"""Lấy kích thước file và format thành KB/MB"""
 		try:

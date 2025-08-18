@@ -7,6 +7,8 @@ Chứa các worker class để xử lý text-to-speech song song và batch proce
 import os
 import tempfile
 from datetime import datetime
+import time
+import random
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional, List
@@ -125,32 +127,55 @@ class MTProducerWorker(QThread):
                 except Exception as e:
                     raise Exception(f"Lỗi xử lý đoạn {index1}: {str(e)}")
 
-            # Xử lý đa luồng với ThreadPoolExecutor
+            # Xử lý đa luồng theo batch để tránh treo và rate-limit
             with ThreadPoolExecutor(max_workers=self.workers) as executor:
-                # Submit tất cả jobs
-                futures = [executor.submit(job, i+1, chunk)
-                           for i, chunk in enumerate(chunks)]
-
-                # Xử lý kết quả khi hoàn thành
-                for future in as_completed(futures):
+                batch_size = 150
+                for batch_start in range(0, total, batch_size):
                     if self.stop_flag:
                         self.status.emit("⏹ Đã dừng theo yêu cầu người dùng.")
                         break
 
-                    try:
-                        idx1, path, dur = future.result()
-                        completed[idx1] = (path, dur)
-                    except Exception as e:
-                        self.status.emit(f"⚠️ {str(e)}")
-                        continue
+                    batch_end = min(total, batch_start + batch_size)
+                    # Submit batch hiện tại
+                    futures = [executor.submit(job, i + 1, chunks[i])
+                               for i in range(batch_start, batch_end)]
 
-                    # Emit các đoạn theo đúng thứ tự
-                    while next_index in completed:
-                        p, d = completed.pop(next_index)
-                        self.segment_ready.emit(p, d, next_index)
-                        emitted += 1
-                        self.progress.emit(emitted, total)
-                        next_index += 1
+                    # Xử lý kết quả của batch
+                    for future in as_completed(futures):
+                        if self.stop_flag:
+                            self.status.emit("⏹ Đã dừng theo yêu cầu người dùng.")
+                            break
+
+                        try:
+                            idx1, path, dur = future.result()
+                            completed[idx1] = (path, dur)
+                        except Exception as e:
+                            self.status.emit(f"⚠️ {str(e)}")
+                            continue
+
+                        # Emit các đoạn theo đúng thứ tự
+                        while next_index in completed:
+                            p, d = completed.pop(next_index)
+                            self.segment_ready.emit(p, d, next_index)
+                            emitted += 1
+                            self.progress.emit(emitted, total)
+                            next_index += 1
+
+                    if self.stop_flag:
+                        break
+
+                    # Nếu còn batch kế tiếp, nghỉ ngẫu nhiên 500-700s như yêu cầu
+                    if batch_end < total:
+                        delay_sec = random.randint(10, 20)
+                        # self.status.emit(
+                        #     f"⏳ Tạm dừng {delay_sec}s để tránh giới hạn hệ thống, sẽ tiếp tục sau…"
+                        # )
+                        remaining_ms = delay_sec * 1000
+                        # Ngủ theo bước nhỏ để có thể dừng sớm nếu người dùng bấm dừng
+                        while remaining_ms > 0 and not self.stop_flag:
+                            step = min(200, remaining_ms)
+                            self.msleep(step)
+                            remaining_ms -= step
 
             # Emit các đoạn còn lại (nếu có)
             while not self.stop_flag and next_index in completed:

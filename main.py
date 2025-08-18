@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QTime, QEvent, Signal
 from PySide6.QtGui import QAction, QColor, QIcon
 import sys
+import signal
 import os
 from datetime import datetime
 from typing import Optional, List
@@ -22,6 +23,7 @@ from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
+from app.utils.helps import clean_all_temp_parts
 
 
 class ClickToCloseOverlay(QWidget):
@@ -1030,9 +1032,30 @@ class MainWindow(QMainWindow):
             self._add_log_item(
                 f"Window restore error: {str(e)}", level="warning")
 
+    def closeEvent(self, event):
+        """Cleanup temporary parts when the application is closing."""
+        try:
+            cleaned = clean_all_temp_parts()
+            # Log to output list if available
+            self._add_log_item(f"🧹 Đã dọn {cleaned} thư mục tạm.", level="info")
+        except Exception as e:
+            try:
+                self._add_log_item(f"⚠️ Lỗi khi dọn thư mục tạm: {str(e)}", level="warning")
+            except Exception:
+                pass
+        finally:
+            event.accept()
+
 
 def main():
     """Main application entry point"""
+    # Dọn dẹp tàn dư từ phiên trước (trong trường hợp app bị treo/crash)
+    try:
+        cleaned_on_start = clean_all_temp_parts()
+        # Không log được ở đây vì chưa có window; chỉ đảm bảo sạch tàn dư
+    except Exception:
+        pass
+
     app = QApplication(sys.argv)
     window = MainWindow()
     screen = app.primaryScreen().geometry()
@@ -1045,6 +1068,47 @@ def main():
     y = 0
 
     window.move(x, y)
+    
+    # Thiết lập cleanup khi app thoát (backup ngoài closeEvent)
+    try:
+        def _qt_about_to_quit():
+            try:
+                clean_all_temp_parts()
+            except Exception:
+                pass
+        app.aboutToQuit.connect(_qt_about_to_quit)
+    except Exception:
+        pass
+
+    # Cài đặt bắt exception toàn cục để dọn dẹp trước khi thoát bất thường
+    try:
+        def _global_excepthook(exctype, exc, tb):
+            try:
+                clean_all_temp_parts()
+            except Exception:
+                pass
+            # Gọi excepthook mặc định
+            sys.__excepthook__(exctype, exc, tb)
+        sys.excepthook = _global_excepthook
+    except Exception:
+        pass
+
+    # Bắt tín hiệu hệ thống (Ctrl+C, đóng tiến trình) để dọn dẹp
+    try:
+        def _signal_handler(signum, frame):
+            try:
+                clean_all_temp_parts()
+            except Exception:
+                pass
+            # Kết thúc tiến trình ngay
+            sys.exit(0)
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+        if hasattr(signal, 'SIGBREAK'):
+            signal.signal(signal.SIGBREAK, _signal_handler)
+    except Exception:
+        pass
+
     window.show()
     sys.exit(app.exec())
 

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QListWidget, QProgressBar, QMessageBox,
     QFileDialog, QListWidgetItem
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from typing import Optional, List
 
 # Import AudioPlayer
@@ -351,6 +351,7 @@ class TTSTab(UIToolbarTab):
 
         row2_layout.addWidget(self.cmb_break_duration)
         row2_layout.addWidget(self.btn_break_segment)
+
         #   row2_layout.addWidget(QLabel("Khoảng:"))
         row2_layout.addStretch()
         content_layout.addLayout(row2_layout)
@@ -363,6 +364,18 @@ class TTSTab(UIToolbarTab):
 
         segments_layout = QVBoxLayout(self.segments_container)
         segments_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Thanh nút tiện ích cho danh sách segments
+        util_bar = QHBoxLayout()
+        self.btn_seek_30_segments = QPushButton("▶️ Phát 0:30")
+        self.btn_seek_30_segments.setToolTip("Seek và phát tại 0:30")
+        self.btn_seek_30_segments.setStyleSheet(AppConfig.BUTTON_STYLE)
+        self.btn_seek_30_segments.setMinimumWidth(90)
+        self.btn_seek_30_segments.setMaximumWidth(130)
+        self.btn_seek_30_segments.clicked.connect(self.on_seek_30)
+        util_bar.addWidget(self.btn_seek_30_segments)
+        util_bar.addStretch()
+        segments_layout.addLayout(util_bar)
 
         # Add label for segments
         # segments_label = QLabel("📋 Danh sách Audio Segments:")
@@ -439,6 +452,8 @@ class TTSTab(UIToolbarTab):
         # Connect SegmentManager context menu signals
         self.segment_manager.show_segment_info.connect(self._show_segment_info_dialog)
         # Không cần connect export_segment_audio nữa vì đã xử lý trực tiếp trong SegmentManager
+        # Đồng bộ player khi segments thay đổi từ SegmentManager (ví dụ: gộp, xóa qua menu chuột phải)
+        self.segment_manager.segments_changed.connect(self._on_segments_changed_from_manager)
         
 
 
@@ -491,26 +506,69 @@ class TTSTab(UIToolbarTab):
                 
             # Tạo message box với thông tin chi tiết
             info_text = f"""
-📋 **THÔNG TIN SEGMENT**
+                📋 **THÔNG TIN SEGMENT**
 
-🔢 **Vị trí**: {segment_info['index']}
-📁 **Tên file**: {segment_info['filename']}
-🎵 **Loại**: {segment_info['segment_type']}
-⏱️ **Thời lượng**: {segment_info['duration_formatted']}
-📊 **Kích thước**: {segment_info['file_size']}
-📍 **Vị trí trong playlist**: {segment_info['cumulative_formatted']}
-🔄 **Đường dẫn đầy đủ**: {segment_info['full_path']}
+                🔢 **Vị trí**: {segment_info['index']}
+                📁 **Tên file**: {segment_info['filename']}
+                🎵 **Loại**: {segment_info['segment_type']}
+                ⏱️ **Thời lượng**: {segment_info['duration_formatted']}
+                📊 **Kích thước**: {segment_info['file_size']}
+                📍 **Vị trí trong playlist**: {segment_info['cumulative_formatted']}
+                🔄 **Đường dẫn đầy đủ**: {segment_info['full_path']}
 
-{'🎬 **Video placeholder**' if segment_info['is_video'] else ''}
-{'⏸️ **Khoảng nghỉ**' if segment_info['is_gap'] else ''}
-{'✂️ **Phần được chia**' if segment_info['is_part'] else ''}
-            """.strip()
+                {'🎬 **Video placeholder**' if segment_info['is_video'] else ''}
+                {'⏸️ **Khoảng nghỉ**' if segment_info['is_gap'] else ''}
+                {'✂️ **Phần được chia**' if segment_info['is_part'] else ''}
+                            """.strip()
             
             QMessageBox.information(self, f"Thông tin Segment {segment_info['index']}", info_text)
-            
         except Exception as e:
             QMessageBox.warning(self, "Lỗi", f"Không thể hiển thị thông tin: {str(e)}")
             
+
+    def _on_segments_changed_from_manager(self) -> None:
+        """Đồng bộ AudioPlayer sau khi SegmentManager thay đổi dữ liệu (merge/xóa/etc)."""
+        try:
+            if not self.audio_player:
+                return
+            # Lưu vị trí và trạng thái phát hiện tại
+            current_pos = self.audio_player.get_current_position()
+            was_playing = self.audio_player.is_audio_playing()
+
+            # Đồng bộ lại segments
+            valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+            self.audio_player.add_segments(valid_paths, valid_durations)
+
+            # Seek về đúng vị trí cũ (clamp nếu vượt quá tổng mới)
+            total_ms = self.audio_player.get_total_duration()
+            if total_ms > 0:
+                target = max(0, min(current_pos, max(0, total_ms - 1)))
+                
+                def _attempt_seek(tries_left: int):
+                    # Thực hiện seek
+                    self.audio_player.seek_to(target)
+                    # Đặt trạng thái phát theo trước đó
+                    if was_playing:
+                        self.audio_player.play()
+                    else:
+                        self.audio_player.pause()
+                    
+                    # Kiểm tra sau một nhịp xem đã tới vị trí mong muốn chưa
+                    def _verify_and_retry():
+                        try:
+                            cur = self.audio_player.get_current_position()
+                            if abs(cur - target) > 80 and tries_left > 0:
+                                QTimer.singleShot(120, lambda: _attempt_seek(tries_left - 1))
+                        except Exception:
+                            pass
+                    QTimer.singleShot(140, _verify_and_retry)
+
+                # Trì hoãn để đảm bảo player đã sẵn sàng, thử tối đa 3 lần
+                QTimer.singleShot(180, lambda: _attempt_seek(3))
+        except Exception:
+            pass
+            
+
 
 
     def append_history(self, text: str, meta: Optional[dict] = None) -> None:
@@ -534,6 +592,24 @@ class TTSTab(UIToolbarTab):
                         f"Ngắt đoạn tại vị trí hiện tại: {ms_to_mmss(current_pos)}\n"
                         f"Khoảng nghỉ: {duration_text}"
                     )
+
+    def on_seek_30(self) -> None:
+        """Seek và phát tại vị trí 0:30."""
+        try:
+            if not self.audio_player:
+                return
+            # 0:30 = 30000 ms
+            target = 60_000
+            total_ms = self.audio_player.get_total_duration()
+            if total_ms <= 0:
+                return
+            # Clamp mục tiêu trong tổng thời lượng
+            target = max(0, min(target, max(0, total_ms - 1)))
+            # Seek và phát
+            self.audio_player.seek_to(target)
+            self.audio_player.play()
+        except Exception:
+            pass
 
     # ==================== AudioPlayer Callbacks ====================
 
@@ -1169,7 +1245,11 @@ class TTSTab(UIToolbarTab):
         self.segment_manager._update_total_duration()
 
         # Update segments display with detailed time information
-        self.segment_manager._update_display()
+        # Use debounced update to reduce UI churn for large numbers of segments
+        if hasattr(self.segment_manager, 'schedule_display_update'):
+            self.segment_manager.schedule_display_update(200)
+        else:
+            self.segment_manager._update_display()
 
         # Update AudioPlayer
         if self.audio_player:
