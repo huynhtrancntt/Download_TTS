@@ -5,6 +5,7 @@ Chứa tất cả các thiết lập cơ bản của ứng dụng Text-to-Speech
 """
 from pathlib import Path
 from app.ui.styles import AppStyles
+import os
 
 
 class AppConfig:
@@ -12,10 +13,10 @@ class AppConfig:
     Lớp cấu hình chính của ứng dụng
     Chứa các thiết lập về cửa sổ, đường dẫn, và giao diện
     """
-    
+
     # Đường dẫn gốc của dự án
     APP_DIR = Path(__file__).resolve().parent.parent.parent
-    
+
     # Thông tin ứng dụng
     APP_NAME = "HT - Downloader"
     APP_VERSION = "1.0.0"
@@ -23,9 +24,9 @@ class AppConfig:
 
     # Thiết lập cửa sổ
     MIN_WINDOW_SIZE = (500, 400)      # Kích thước tối thiểu (width, height)
-    DEFAULT_WINDOW_SIZE = (1000, 700) # Kích thước mặc định
+    DEFAULT_WINDOW_SIZE = (1000, 700)  # Kích thước mặc định
     ICON_PATH = APP_DIR / "images" / "icon.ico"  # Đường dẫn icon ứng dụng
-    
+
     # Thiết lập layout
     HISTORY_PANEL_WIDTH = 300  # Chiều rộng panel lịch sử
 
@@ -38,6 +39,11 @@ class AppConfig:
 
     # Style từ AppStyles
     BUTTON_STYLE = AppStyles.BUTTON_STYLE
+    APP_DIR = Path(os.getcwd())  # thư mục bạn chạy script
+    DATA_DIR = APP_DIR / "data"
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    HISTORY_FILE = DATA_DIR / "tts_history.json"
 
 
 class TTSConfig:
@@ -68,7 +74,7 @@ class TTSConfig:
 
     # Lựa chọn tốc độ (phần trăm thay đổi)
     RATE_CHOICES = [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]
-    
+
     # Lựa chọn cao độ (Hz thay đổi)
     PITCH_CHOICES = [-12, -8, -6, -4, -2, 0, 2, 4, 6, 8, 12]
 
@@ -90,4 +96,5 @@ class TTSConfig:
 
     # Thiết lập file
     TEMP_PREFIX = "edge_tts_parts_"  # Tiền tố file tạm
-    TEMP_DIR = Path(__file__).resolve().parent.parent.parent / "output" / "temp"   # Thư mục lưu file tạm
+    TEMP_DIR = Path(__file__).resolve().parent.parent.parent / \
+        "output" / "temp"   # Thư mục lưu file tạm

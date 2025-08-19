@@ -4,7 +4,7 @@ import json
 import shutil
 import tempfile
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 import asyncio
 from pydub import AudioSegment
 from pydub.utils import which
@@ -85,6 +85,45 @@ def split_text(text: str, max_len: int = None) -> List[str]:
 
     return ideas
 
+def group_by_char_limit_with_len(
+    items: List[str],
+    max_group: int = 10,
+    max_chars: int = 300,
+    sep: str = " | "
+) -> List[Tuple[str, int]]:
+    """
+    Gộp các item liên tiếp thành nhóm, mỗi nhóm <= max_chars ký tự
+    và tối đa max_group phần tử. Trả về list (chuỗi_gộp, độ_dài).
+    """
+    out = []
+    i = 0
+    n = len(items)
+
+    while i < n:
+        if len(items[i]) > max_chars:
+            out.append((items[i], len(items[i])))
+            i += 1
+            continue
+
+        chosen_k = 1
+        for k in range(min(max_group, n - i), 1, -1):
+            chunk = sep.join(items[i:i+k])
+            if len(chunk) <= max_chars:
+                chosen_k = k
+                break
+
+        group_chunk = sep.join(items[i:i+chosen_k])
+        out.append((group_chunk, len(group_chunk)))
+        i += chosen_k
+
+    return out
+def _as_int(x, default=None):
+    if x is None:
+        return default
+    if isinstance(x, (list, tuple)):
+        x = x[0]
+    return int(x)
+
 
 # ---------- Edge TTS ----------
 
@@ -158,6 +197,7 @@ def save_log_entry(entry: dict):
 
         data = []
 
+        print(TTSConfig.LOG_PATH)
         # Đọc dữ liệu cũ nếu file tồn tại
         if TTSConfig.LOG_PATH.exists():
             try:

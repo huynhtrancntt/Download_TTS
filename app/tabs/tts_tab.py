@@ -6,11 +6,11 @@ Tab Text-to-Speech - Sử dụng hoàn toàn AudioPlayer
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
     QLabel, QTextEdit, QComboBox, QSlider, QSpinBox,
-    QListWidget, QProgressBar, QMessageBox,
+    QListWidget, QMessageBox,
     QFileDialog, QListWidgetItem
 )
-from PySide6.QtCore import Qt, Signal, QTimer
-from typing import Optional, List
+from PySide6.QtCore import Qt, QTimer
+from typing import Optional
 
 # Import AudioPlayer
 from app.core.audio_player import AudioPlayer
@@ -27,7 +27,7 @@ from app.appConfig import AppConfig
 from app.history.historyItem_TTS import TTSHistoryItem
 from app.workers import MTProducerWorker
 
-
+import json
 from app.utils.helps import (
     clean_all_temp_parts
 )
@@ -90,53 +90,19 @@ class TTSTab(UIToolbarTab):
                 "TTS Tab sẵn sàng - Chức năng ngắt đoạn đã kích hoạt")
 
     def _setup_history_system(self) -> None:
-        """Setup history system"""
+        """Setup history system with auto-refresh"""
         hist = self.enable_history(
             hist_title="Lịch sử TTS",
             item_factory=lambda text, ts, meta: TTSHistoryItem(
                 text, ts, meta),
-            on_item_selected=self._on_history_selected
+            on_item_selected=self._on_history_selected,
+            refresh_callback=self._refresh_history_list,  # Thêm refresh callback
+            on_delete=self._on_delete,  # Callback cho nút Xóa
         )
-        # Không thêm demo; sẽ load khi người dùng mở panel
-        self.append_history("dòng 1", {"lang": "vi-VN"})
-        self.append_history("dòng 2", {"lang": "vi-VN"})
-        self.append_history("dòng 3", {"lang": "vi-VN"})
-        self.append_history("dòng 4", {"lang": "vi-VN"})
-        self.append_history("dòng 5", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 6", {"lang": "vi-VN"})
-        self.append_history("dòng 7", {"lang": "vi-VN"})
-        
+
+        # Không load demo data ngay, sẽ load khi mở panel
+        print(
+            "[TTSTab] History system setup complete - will auto-refresh when panel opens")
 
     def _setup_header_section(self, root_layout: QVBoxLayout) -> None:
         """Setup header section"""
@@ -186,6 +152,7 @@ class TTSTab(UIToolbarTab):
         # Add history button
         if hasattr(self, 'history') and self.history:
             row1_layout.addWidget(self.history.btn)
+            print("[TTSTab] History button added to toolbar")
 
         parent_layout.addLayout(row1_layout)
 
@@ -478,14 +445,14 @@ class TTSTab(UIToolbarTab):
         # Setup SegmentManager with UI components
         self.segment_manager.set_ui_components(
             self.list_segments, self.audio_player)
-            
+
         # Connect SegmentManager context menu signals
-        self.segment_manager.show_segment_info.connect(self._show_segment_info_dialog)
+        self.segment_manager.show_segment_info.connect(
+            self._show_segment_info_dialog)
         # Không cần connect export_segment_audio nữa vì đã xử lý trực tiếp trong SegmentManager
         # Đồng bộ player khi segments thay đổi từ SegmentManager (ví dụ: gộp, xóa qua menu chuột phải)
-        self.segment_manager.segments_changed.connect(self._on_segments_changed_from_manager)
-        
-
+        self.segment_manager.segments_changed.connect(
+            self._on_segments_changed_from_manager)
 
     def _show_player_section(self, show: bool = True) -> None:
         """Show or hide player section and segments list"""
@@ -525,15 +492,16 @@ class TTSTab(UIToolbarTab):
 
         # Đảm bảo progress bar hiển thị sau khi kết nối signals
         self._ensure_progress_visible()
-        
+
     def _show_segment_info_dialog(self, index: int) -> None:
         """Hiển thị dialog thông tin segment"""
         try:
             segment_info = self.segment_manager.get_segment_info(index)
             if not segment_info:
-                QMessageBox.warning(self, "Lỗi", "Không thể lấy thông tin segment")
+                QMessageBox.warning(
+                    self, "Lỗi", "Không thể lấy thông tin segment")
                 return
-                
+
             # Tạo message box với thông tin chi tiết
             info_text = f"""
                 📋 **THÔNG TIN SEGMENT**
@@ -550,11 +518,12 @@ class TTSTab(UIToolbarTab):
                 {'⏸️ **Khoảng nghỉ**' if segment_info['is_gap'] else ''}
                 {'✂️ **Phần được chia**' if segment_info['is_part'] else ''}
                             """.strip()
-            
-            QMessageBox.information(self, f"Thông tin Segment {segment_info['index']}", info_text)
+
+            QMessageBox.information(
+                self, f"Thông tin Segment {segment_info['index']}", info_text)
         except Exception as e:
-            QMessageBox.warning(self, "Lỗi", f"Không thể hiển thị thông tin: {str(e)}")
-            
+            QMessageBox.warning(
+                self, "Lỗi", f"Không thể hiển thị thông tin: {str(e)}")
 
     def _on_segments_changed_from_manager(self) -> None:
         """Đồng bộ AudioPlayer sau khi SegmentManager thay đổi dữ liệu (merge/xóa/etc)."""
@@ -573,7 +542,7 @@ class TTSTab(UIToolbarTab):
             total_ms = self.audio_player.get_total_duration()
             if total_ms > 0:
                 target = max(0, min(current_pos, max(0, total_ms - 1)))
-                
+
                 def _attempt_seek(tries_left: int):
                     # Thực hiện seek
                     self.audio_player.seek_to(target)
@@ -582,13 +551,14 @@ class TTSTab(UIToolbarTab):
                         self.audio_player.play()
                     else:
                         self.audio_player.pause()
-                    
+
                     # Kiểm tra sau một nhịp xem đã tới vị trí mong muốn chưa
                     def _verify_and_retry():
                         try:
                             cur = self.audio_player.get_current_position()
                             if abs(cur - target) > 80 and tries_left > 0:
-                                QTimer.singleShot(120, lambda: _attempt_seek(tries_left - 1))
+                                QTimer.singleShot(
+                                    120, lambda: _attempt_seek(tries_left - 1))
                         except Exception:
                             pass
                     QTimer.singleShot(140, _verify_and_retry)
@@ -597,31 +567,24 @@ class TTSTab(UIToolbarTab):
                 QTimer.singleShot(180, lambda: _attempt_seek(3))
         except Exception:
             pass
-            
 
+    # def append_history(self, text: str, meta: Optional[dict] = None) -> None:
+    #     """Add item to TTS history"""
+    #     if self.history:
+    #         # Ensure meta exists and inject current language
+    #         meta_payload = dict(meta) if isinstance(meta, dict) else {}
+    #         try:
+    #             if hasattr(self, 'cmb_lang') and self.cmb_lang is not None:
+    #                 # Prefer stored userData (code), fallback to text
+    #                 lang_code = self.cmb_lang.currentData()
+    #                 if not lang_code:
+    #                     lang_code = self.cmb_lang.currentText()
+    #                 if 'lang' not in meta_payload and lang_code:
+    #                     meta_payload['lang'] = lang_code
+    #         except Exception:
+    #             pass
+    #         self.history.panel.add_history(text, meta=meta_payload)
 
-
-    def append_history(self, text: str, meta: Optional[dict] = None) -> None:
-        """Add item to TTS history"""
-        if self.history:
-            # Ensure meta exists and inject current language
-            meta_payload = dict(meta) if isinstance(meta, dict) else {}
-            try:
-                if hasattr(self, 'cmb_lang') and self.cmb_lang is not None:
-                    # Prefer stored userData (code), fallback to text
-                    lang_code = self.cmb_lang.currentData()
-                    if not lang_code:
-                        lang_code = self.cmb_lang.currentText()
-                    if 'lang' not in meta_payload and lang_code:
-                        meta_payload['lang'] = lang_code
-            except Exception:
-                pass
-            self.history.panel.add_history(text, meta=meta_payload)
-
-    def _on_history_selected(self, text: str) -> None:
-        """Callback when history item is selected"""
-        self.text_input_edge_tts.setPlainText(text)
-        self.text_input_edge_tts.setFocus()
 
     def _on_break_duration_changed(self, duration_text: str) -> None:
         """Callback when break duration combo box changes"""
@@ -1589,3 +1552,173 @@ class TTSTab(UIToolbarTab):
                 pass
 
         super().closeEvent(event)
+
+    # ==================== History Callback Methods ====================
+
+    def _on_history_selected(self, payload: Optional[dict] = None) -> None:
+        """Handle click from a history item"""
+        try:
+            if payload is not None:
+                # print("[TTSTab] Selected history payload:", payload)
+                # Có thể thêm logic để load text vào text editor
+                if isinstance(payload, str):
+                    # Nếu payload là text, load vào text editor
+                    if hasattr(self, 'text_input_edge_tts'):
+                        self.text_input_edge_tts.setPlainText(payload)
+                        # Focus vào text editor
+                        self.text_input_edge_tts.setFocus()
+                elif isinstance(payload, dict) and 'full_text' in payload:
+                    # Nếu payload là dict có full_text, load vào text editor
+                    if hasattr(self, 'text_input_edge_tts'):
+                        self.text_input_edge_tts.setPlainText(
+                            payload['full_text'])
+                        # Focus vào text editor
+                        self.text_input_edge_tts.setFocus()
+        except Exception as e:
+            print(f"[TTSTab] Error handling history selection: {e}")
+
+    def _on_delete(self, index: int):
+        """Handle delete button click from history panel"""
+        try:
+            print(f"[TTSTab] Delete index requested: {index}")
+            # Lấy widget và meta của item để xác định entry tương ứng
+            panel = getattr(self, 'history', None).panel if getattr(
+                self, 'history', None) else None
+            if not panel:
+                return
+            list_widget = panel.history_list
+            if index < 0 or index >= list_widget.count():
+                return
+            list_item = list_widget.item(index)
+            item_widget = list_widget.itemWidget(list_item)
+            meta = getattr(item_widget, "_meta", {}) if item_widget else {}
+
+            entries_path = AppConfig.HISTORY_FILE
+            if not entries_path.exists():
+                QMessageBox.warning(self, "Xóa lịch sử",
+                                    "Không tìm thấy tệp lịch sử để cập nhật.")
+                return
+            import json as _json
+            with open(entries_path, 'r', encoding='utf-8') as f:
+                try:
+                    entries = _json.load(f)
+                except Exception:
+                    entries = []
+
+            if not isinstance(entries, list):
+                entries = []
+
+            # Tìm entry phù hợp theo started_at hoặc full_text/input_file
+            started_at = meta.get('started_at') if isinstance(
+                meta, dict) else None
+            full_text = meta.get('full_text') if isinstance(
+                meta, dict) else None
+            voice_meta = meta.get('voice') if isinstance(meta, dict) else None
+
+            match_idx = -1
+            for i in range(len(entries) - 1, -1, -1):  # duyệt ngược để ưu tiên item mới
+                e = entries[i]
+                if started_at and e.get('started_at') == started_at:
+                    match_idx = i
+                    break
+                if full_text and e.get('input_file') == full_text:
+                    if not voice_meta or e.get('voice') == voice_meta:
+                        match_idx = i
+                        break
+
+            if match_idx == -1:
+                # Không tìm thấy entry phù hợp
+                QMessageBox.information(
+                    self, "Xóa lịch sử", "Không tìm thấy mục tương ứng trong file lịch sử. Chỉ xóa khỏi danh sách hiển thị.")
+                return
+
+            # Xóa entry khỏi JSON và ghi lại
+            try:
+                entries.pop(match_idx)
+                with open(entries_path, 'w', encoding='utf-8') as f:
+                    _json = __import__('json')
+                    _json.dump(entries, f, ensure_ascii=False, indent=4)
+            except Exception as write_err:
+                pass
+
+            # Thông báo thành công
+            # QMessageBox.information(self, "Xóa lịch sử", "Đã xóa mục lịch sử và file (nếu có).")
+
+            # Optional: refresh lại danh sách để đồng bộ (UI item đã được panel xóa)
+            # self._refresh_history_list()
+        except Exception as e:
+            pass
+
+    def _refresh_history_list(self):
+        """Refresh history list with latest items from entries.json"""
+        try:
+            print("[TTSTab] Refreshing history list...")
+
+            # Clear current history
+            if self.history and hasattr(self.history.panel, 'clear_history'):
+                self.history.panel.clear_history()
+
+            # Load lại history mới nhất từ entries.json
+            latest_history = self._load_latest_history()
+
+            # Thêm lại các item mới
+            if self.history and hasattr(self.history.panel, 'add_history'):
+                for item in latest_history:
+                    self.history.panel.add_history(
+                        text=item.get('text', ''),
+                        meta=item.get('meta', {})
+                    )
+
+        except Exception as e:
+            print(f"[TTSTab] Error refreshing history list: {e}")
+
+    def _load_latest_history(self):
+        """Load latest history data"""
+        try:
+            # Load từ file entries.json
+            history_file = AppConfig.HISTORY_FILE
+            if history_file.exists():
+                with open(history_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Chuyển đổi cấu trúc data thành format phù hợp
+                    history_items = []
+                    for item in data[-20:]:  # Lấy 20 item gần nhất
+                        # Xử lý text để hiển thị đẹp hơn
+                        input_text = item.get('input_file', '')
+                        display_text = input_text[:100] + \
+                            '...' if len(input_text) > 100 else input_text
+
+                        # Xử lý timestamp
+                        started_at = item.get('started_at', '')
+                        if started_at:
+                            try:
+                                from datetime import datetime
+                                dt = datetime.fromisoformat(
+                                    started_at.replace('Z', '+00:00'))
+                                timestamp = dt.strftime("%H:%M %d/%m/%Y")
+                            except:
+                                # Lấy phần đầu nếu parse lỗi
+                                timestamp = started_at[:19]
+                        else:
+                            timestamp = "Unknown"
+
+                        history_items.append({
+                            'text': display_text,
+                            'meta': {
+                                'voice': item.get('voice', ''),
+                                'status': item.get('status', ''),
+                                'created_chunks': item.get('created_chunks', 0),
+                                'started_at': started_at,
+                                'timestamp': timestamp,
+                                'full_text': input_text,
+                                'lang': 'vi-VN'  # Thêm language info
+                            }
+                        })
+
+                    return history_items
+            else:
+                print("[TTSTab] file not found")
+            return []
+        except Exception as e:
+            print(f"[TTSTab] Error loading history: {e}")
+            return []

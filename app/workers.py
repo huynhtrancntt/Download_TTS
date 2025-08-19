@@ -17,10 +17,11 @@ from PySide6.QtCore import QThread, Signal
 from pydub import AudioSegment
 
 from app.appConfig import AppConfig
-from app.utils.helps import split_text, tts_sync_save, save_log_entry
+from app.utils.helps import split_text, tts_sync_save, save_log_entry, group_by_char_limit_with_len
 from app.utils.audio_helpers import get_mp3_duration_ms
 from app.utils.helps import hide_directory_on_windows
-
+from app.utils.historyLog import save_history_log
+import json
 # ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 
 
@@ -65,7 +66,8 @@ class MTProducerWorker(QThread):
         self.pitch: int = pitch
         self.max_len: int = max_len
         self.workers: int = max(1, workers)  # Tối thiểu 1 worker
-
+        self.group_max_items: int = 10      # NEW: tối đa bao nhiêu ý/nhóm
+        self.group_sep: str = " | "
         # Trạng thái worker
         self.stop_flag: bool = False
         self.tmpdir: Optional[str] = None
@@ -87,10 +89,17 @@ class MTProducerWorker(QThread):
                 self.error.emit("❌ Chưa có nội dung văn bản để xử lý.")
                 return
 
-            # Chia văn bản thành các đoạn nhỏ
-            chunks = split_text(self.text, self.max_len)
+            # 1) Tách ý (ý đơn) — dùng ngưỡng nhỏ hơn để ý không quá dài
+            ideas = split_text(self.text, self.max_len)
+            # 2) Gộp ý thành cụm lớn hơn — giữ đúng thứ tự
+            grouped = group_by_char_limit_with_len(
+                ideas,
+                max_group=self.group_max_items,
+                max_chars=self.max_len,    # thường đặt = self.max_len
+                sep=self.group_sep
+            )
+            chunks = [chunk for (chunk, _len_) in grouped]
             total = len(chunks)
-
             if total == 0:
                 self.error.emit("❌ Không thể tách văn bản thành các đoạn.")
                 return
@@ -143,7 +152,8 @@ class MTProducerWorker(QThread):
                     # Xử lý kết quả của batch
                     for future in as_completed(futures):
                         if self.stop_flag:
-                            self.status.emit("⏹ Đã dừng theo yêu cầu người dùng.")
+                            self.status.emit(
+                                "⏹ Đã dừng theo yêu cầu người dùng.")
                             break
 
                         try:
@@ -186,6 +196,26 @@ class MTProducerWorker(QThread):
                 next_index += 1
 
             if not self.stop_flag:
+
+                start_time = datetime.now().isoformat()
+
+                entry = {
+                    "input_file": str(self.text),
+                    "output_file": "",
+                    "media_type": "audio/mp3",
+                    "voice": self.voice,
+                    "rate_percent": self.rate,
+                    "pitch_hz": self.pitch,
+                    "max_chunk_chars": self.max_len,
+                    "created_chunks": emitted,
+                    # "total_duration_ms_est": total_ms,
+                    "started_at": start_time,
+                    "finished_at": datetime.now().isoformat(),
+                    "status": "success",
+                }
+                history_file = AppConfig.HISTORY_FILE
+                save_history_log(history_file, entry)
+
                 self.status.emit(
                     f"✅ Hoàn thành tạo {emitted}/{total} đoạn audio.")
                 self.all_done.emit()

@@ -18,6 +18,8 @@ COLORS = {
     'text_primary': '#e2e8f0',
     'text_white': '#ffffff',
     'text_disabled': '#a0aec0',
+    'text_history_label': '#94a3b8',
+    'text_history_label_2': '#4a5568',  # 64748b
     'accent_green': '#05ff8f',
     'accent_green_dark': '#05df60',
     'accent_green_hover': '#16a34a',

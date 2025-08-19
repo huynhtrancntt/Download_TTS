@@ -1,6 +1,7 @@
 # Import dependencies
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-                               QLabel, QScrollArea, QListWidget, QListWidgetItem
+                               QLabel, QScrollArea, QListWidget, QListWidgetItem,
+                               QMessageBox, QMenu
                                )
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint
 
@@ -9,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Tuple
 from app.appConfig import AppConfig
+import json
 
 
 class HistoryPanel(QWidget):
@@ -18,15 +20,24 @@ class HistoryPanel(QWidget):
     def __init__(self, title_text: str = "Lịch sử",
                  item_factory: Optional[Callable] = None,
                  on_item_selected: Optional[Callable] = None,
+                 refresh_callback: Optional[Callable] = None,  # Thêm refresh_callback
                  close_callback: Optional[Callable] = None,
+                 on_play: Optional[Callable] = None,  # Thêm callback cho nút Phát
+                 on_delete: Optional[Callable] = None,  # Thêm callback cho nút Xóa
+                 on_open_root: Optional[Callable] = None,  # Thêm callback cho nút Thư mục
                  parent: Optional[QWidget] = None):
+
         super().__init__(parent)
 
         self.setFixedWidth(AppConfig.HISTORY_PANEL_WIDTH)
         # self.setStyleSheet()
         self.item_factory = item_factory
         self.on_item_selected = on_item_selected
+        self.refresh_callback = refresh_callback  # Lưu refresh_callback
         self.close_callback = close_callback
+        self._on_play_cb = on_play  # Lưu callback cho nút Phát
+        self._on_delete_cb = on_delete  # Lưu callback cho nút Xóa
+        self._on_open_root_cb = on_open_root  # Lưu callback cho nút Thư mục
 
         self._setup_ui(title_text)
         self.hide()
@@ -82,8 +93,29 @@ class HistoryPanel(QWidget):
         """)
         close_btn.clicked.connect(self.close_panel)
 
+        # Thêm nút cập nhật
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setFixedSize(24, 24)
+        refresh_btn.setToolTip("Cập nhật danh sách")
+        refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                color: {AppStyles.COLORS['text_secondary']};
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                color: {AppStyles.COLORS['text_primary']};
+                background: {AppStyles.COLORS['border']};
+                border-radius: 12px;
+            }}
+        """)
+        refresh_btn.clicked.connect(self.refresh_history)
+
         header_layout.addWidget(self.title)
         header_layout.addStretch()
+        header_layout.addWidget(refresh_btn)  # Thêm nút cập nhật
         header_layout.addWidget(close_btn)
         layout.addLayout(header_layout)
 
@@ -136,6 +168,18 @@ class HistoryPanel(QWidget):
         self.history_list.setSpacing(6)
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Đồng bộ highlight khi đổi selection
+        try:
+            self.history_list.currentRowChanged.connect(self._update_selection_styles)
+        except Exception:
+            pass
+        # Context menu for right-click actions
+        try:
+            self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)
+            self.history_list.customContextMenuRequested.connect(self._on_history_context_menu)
+        except Exception:
+            pass
         layout.addWidget(self.history_list)
 
         # Footer separator + 2 hàng nút (đặt SAU list để luôn ở cuối)
@@ -157,6 +201,7 @@ class HistoryPanel(QWidget):
         row1 = QHBoxLayout(row1_widget)
         self.btn_play = QPushButton("Phát")
         self.btn_del = QPushButton("Xóa")
+        self.btn_del.setEnabled(False)  
         row1.addWidget(self.btn_play)
         row1.addWidget(self.btn_del)
 
@@ -171,11 +216,15 @@ class HistoryPanel(QWidget):
         footer.addWidget(row1_widget)
         # footer.addWidget(row2_widget)
         layout.addWidget(footer_container)
+        
+        # Kết nối các nút với callback
+        self.btn_play.clicked.connect(self._on_play_selected)
+        self.btn_del.clicked.connect(self._delete_selected)
+        self.btn_open.clicked.connect(self._open_root)
 
     def add_history(self, text: str, meta: Optional[dict] = None):
         """Add a new history item using QListWidget"""
         timestamp = datetime.now().strftime("%H:%M %d/%m/%Y")
-        default_lang = "vi-VN"
 
         if self.item_factory:
             item_widget = self.item_factory(text, timestamp, meta or {})
@@ -188,12 +237,208 @@ class HistoryPanel(QWidget):
             self.history_list.setItemWidget(list_item, item_widget)
 
     def _connect_item_signals(self, item):
-        """Connect item selection signal if available"""
-        if self.on_item_selected and hasattr(item, "selected"):
+        """Connect item selection signal and wire selection highlighting"""
+        if hasattr(item, "selected"):
             try:
-                item.selected.connect(self.on_item_selected)
+                item.selected.connect(self._on_item_widget_selected)
             except Exception:
                 pass  # Fail silently if connection fails
+
+    def _on_item_widget_selected(self, _payload):
+        """When an item widget is clicked, select it and forward a rich payload (text, timestamp, meta)"""
+        try:
+            widget = self.sender()
+            if widget is not None:
+                self._select_widget(widget)
+            # Build rich payload from the widget instead of raw signal value
+            payload_data = {}
+            try:
+                base_text = getattr(widget, '_text', None)
+                base_ts = getattr(widget, '_timestamp', None)
+                meta = getattr(widget, '_meta', {})
+                meta_copy = dict(meta) if isinstance(meta, dict) else {}
+                payload_data = {
+                    'text': base_text,
+                    'timestamp': base_ts,
+                    'meta': meta_copy,
+                }
+                # Also merge meta fields at the top level for convenience
+                if isinstance(meta_copy, dict):
+                    payload_data.update(meta_copy)
+            except Exception:
+                pass
+            # Forward to external callback after selection
+            if self.on_item_selected:
+                self.on_item_selected(payload_data)
+        except Exception:
+            pass
+
+    def _on_history_context_menu(self, pos):
+        """Show context menu on right-click for history list"""
+        try:
+            item = self.history_list.itemAt(pos)
+            if not item:
+                return
+            index = self.history_list.row(item)
+            if index < 0:
+                return
+            # Ensure the clicked item is selected
+            self.history_list.setCurrentRow(index)
+            # Build and show context menu
+            menu = QMenu(self)
+            menu.addAction("Xóa", lambda: self._delete_selected())
+            global_pos = self.history_list.viewport().mapToGlobal(pos)
+            menu.exec(global_pos)
+        except Exception:
+            pass
+
+    def _select_widget(self, widget) -> None:
+        """Set the given widget as the current selection in the list"""
+        try:
+            count = self.history_list.count()
+            for i in range(count):
+                it = self.history_list.item(i)
+                w = self.history_list.itemWidget(it)
+                if w is widget:
+                    self.history_list.setCurrentRow(i)
+                    break
+            # Update styles
+            self._update_selection_styles(self.history_list.currentRow())
+        except Exception:
+            pass
+
+    def _update_selection_styles(self, current_index: int) -> None:
+        """Toggle selected style on widgets to reflect current selection"""
+        try:
+            count = self.history_list.count()
+            for i in range(count):
+                it = self.history_list.item(i)
+                w = self.history_list.itemWidget(it)
+                if hasattr(w, 'set_selected'):
+                    w.set_selected(i == current_index)
+            # Toggle delete button based on selection
+            if hasattr(self, 'btn_del'):
+                self.btn_del.setEnabled(current_index >= 0)
+        except Exception:
+            pass
+
+    def refresh_history(self):
+        """Refresh history list with latest items"""
+        # Clear current list
+        self.history_list.clear()
+        # Disable delete button when list is cleared
+        if hasattr(self, 'btn_del'):
+            self.btn_del.setEnabled(False)
+        
+        # Emit signal để yêu cầu cập nhật từ bên ngoài
+        if hasattr(self, 'refresh_requested'):
+            self.refresh_requested.emit()
+        
+        # Hoặc gọi callback nếu có
+        if hasattr(self, 'refresh_callback') and self.refresh_callback:
+            self.refresh_callback()
+            
+    def _on_history_selected(self, payload: Optional[dict] = None) -> None:
+        """Handle history item selection"""
+        if self._on_history_selected:
+            self._on_history_selected(payload)
+
+    def _get_selected_item_widget(self):
+        """Get the currently selected item widget"""
+        idx = self.history_list.currentRow()
+        if idx < 0:
+            return None
+
+
+        item = self.history_list.item(idx)
+        return self.history_list.itemWidget(item)
+
+    def _on_play_selected(self):
+        """Handle play button click"""
+        widget = self._get_selected_item_widget()
+        if self._on_play_cb and widget is not None:
+            try:
+                # Truyền text hoặc meta nếu có
+                payload = getattr(widget, "_meta", None) or getattr(widget, "_text", None)
+                self._on_play_cb(payload)
+            except Exception:
+                pass
+
+    def _delete_selected(self):
+        """Handle delete button click with confirmation"""
+        idx = self.history_list.currentRow()
+        if idx < 0:
+            return
+        try:
+            # Lấy widget để hiển thị thông tin xác nhận
+            item = self.history_list.item(idx)
+            widget = self.history_list.itemWidget(item)
+            display_text = getattr(widget, "_text", "mục đã chọn")
+
+            # Hỏi xác nhận
+            reply = QMessageBox.question(
+                self,
+                "Xác nhận xóa",
+                f"Bạn có chắc muốn xóa mục lịch sử này và xóa file liên quan (nếu có)?\n\n{display_text}",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            # Gọi callback để xử lý logic xóa file/JSON trước khi xóa UI item
+            if self._on_delete_cb:
+                try:
+                    self._on_delete_cb(idx)
+                except Exception:
+                    pass
+
+            # Xóa khỏi UI
+            taken_item = self.history_list.takeItem(idx)
+            del taken_item
+            # Auto-select the next item (or previous if last was removed) and update state
+            try:
+                remaining = self.history_list.count()
+                if remaining > 0:
+                    new_index = min(idx, remaining - 1)
+                    self.history_list.setCurrentRow(new_index)
+                    # Update styles for new selection
+                    self._update_selection_styles(new_index)
+                    # Fire external selection callback with rich payload
+                    if self.on_item_selected:
+                        try:
+                            item2 = self.history_list.item(new_index)
+                            widget2 = self.history_list.itemWidget(item2)
+                            base_text = getattr(widget2, '_text', None)
+                            base_ts = getattr(widget2, '_timestamp', None)
+                            meta2 = getattr(widget2, '_meta', {})
+                            meta_copy2 = dict(meta2) if isinstance(meta2, dict) else {}
+                            payload2 = {
+                                'text': base_text,
+                                'timestamp': base_ts,
+                                'meta': meta_copy2,
+                            }
+                            if isinstance(meta_copy2, dict):
+                                payload2.update(meta_copy2)
+                            self.on_item_selected(payload2)
+                        except Exception:
+                            pass
+                # Update delete button based on current selection
+                if hasattr(self, 'btn_del'):
+                    self.btn_del.setEnabled(self.history_list.currentRow() >= 0)
+            except Exception:
+                if hasattr(self, 'btn_del'):
+                    self.btn_del.setEnabled(False)
+        except Exception:
+            pass
+
+    def _open_root(self):
+        """Handle open root button click"""
+        if self._on_open_root_cb:
+            try:
+                self._on_open_root_cb()
+            except Exception:
+                pass
 
     def clear_history(self):
         """Clear all history items"""
@@ -202,6 +447,9 @@ class HistoryPanel(QWidget):
     def _clear_history_silent(self):
         """Clear all history items from QListWidget"""
         self.history_list.clear()
+        # Ensure delete button is disabled when no items
+        if hasattr(self, 'btn_del'):
+            self.btn_del.setEnabled(False)
 
     def show_with_animation(self, parent_width: int):
         """Slide in the panel from the right with animation"""

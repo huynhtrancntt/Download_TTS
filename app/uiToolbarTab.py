@@ -22,6 +22,7 @@ class UIToolbarTab(QWidget):
 
     def enable_history(self, hist_title: str, item_factory: Callable,
                        on_item_selected: Optional[Callable] = None,
+                       refresh_callback: Optional[Callable] = None,  # Thêm refresh_callback
                        panel_cls: Optional[Type[QWidget]] = None,
                        **panel_kwargs) -> HistoryFeature:
         """Enable history functionality for this tab"""
@@ -30,6 +31,7 @@ class UIToolbarTab(QWidget):
             hist_title=hist_title,
             item_factory=item_factory,
             on_item_selected=on_item_selected,
+            refresh_callback=refresh_callback,  # Truyền refresh_callback
             panel_cls=panel_cls,
             **panel_kwargs
         )
