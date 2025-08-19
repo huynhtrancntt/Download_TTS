@@ -23,7 +23,7 @@ from pathlib import Path
 import tempfile
 # Import modules
 from app.uiToolbarTab import UIToolbarTab
-from app.appConfig import AppConfig
+from app.core.config import AppConfig
 from app.history.historyItem_TTS import TTSHistoryItem
 from app.workers import MTProducerWorker
 

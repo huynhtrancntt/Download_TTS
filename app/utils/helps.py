@@ -10,7 +10,7 @@ from pydub import AudioSegment
 from pydub.utils import which
 import edge_tts
 
-from app.core.config import TTSConfig
+from app.core.config import AppConfig
 
 # ---------- Text split ----------
 
@@ -161,7 +161,7 @@ def clean_all_temp_parts():
     try:
         for name in os.listdir(tmpdir):
             p = os.path.join(tmpdir, name)
-            if os.path.isdir(p) and name.startswith(TTSConfig.TEMP_PREFIX):
+            if os.path.isdir(p) and name.startswith(AppConfig.TEMP_PREFIX):
                 try:
                     shutil.rmtree(p, ignore_errors=True)
                     cleaned_count += 1
@@ -197,11 +197,10 @@ def save_log_entry(entry: dict):
 
         data = []
 
-        print(TTSConfig.LOG_PATH)
         # Đọc dữ liệu cũ nếu file tồn tại
-        if TTSConfig.LOG_PATH.exists():
+        if AppConfig.LOG_PATH.exists():
             try:
-                with open(TTSConfig.LOG_PATH, "r", encoding="utf-8") as f:
+                with open(AppConfig.LOG_PATH, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     if not isinstance(data, list):
                         data = []
@@ -217,7 +216,7 @@ def save_log_entry(entry: dict):
         data.append(entry)
 
         # Lưu vào file
-        with open(TTSConfig.LOG_PATH, "w", encoding="utf-8") as f:
+        with open(AppConfig.LOG_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
         return True

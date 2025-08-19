@@ -16,12 +16,13 @@ from typing import Optional, List
 from PySide6.QtCore import QThread, Signal
 from pydub import AudioSegment
 
-from app.appConfig import AppConfig
+from app.core.config import AppConfig
 from app.utils.helps import split_text, tts_sync_save, save_log_entry, group_by_char_limit_with_len
 from app.utils.audio_helpers import get_mp3_duration_ms
 from app.utils.helps import hide_directory_on_windows
 from app.utils.historyLog import save_history_log
 import json
+import uuid
 # ==================== MTProducerWorker - Worker đa luồng cho Tab TTS ====================
 
 
@@ -104,11 +105,13 @@ class MTProducerWorker(QThread):
                 self.error.emit("❌ Không thể tách văn bản thành các đoạn.")
                 return
 
-            # Tạo thư mục tạm để lưu các file audio
-            self.tmpdir = tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX)
-
+            self.tmpdir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
             hide_directory_on_windows(self.tmpdir)
 
+            # Tạo thư mục con với UUID
+            self.tmpdir = self.tmpdir / str(uuid.uuid4())
+            self.tmpdir.mkdir(parents=True, exist_ok=True)
+            hide_directory_on_windows(self.tmpdir)
             self.status.emit(
                 f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
 

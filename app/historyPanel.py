@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Tuple
-from app.appConfig import AppConfig
+from app.core.config import AppConfig
 import json
 
 

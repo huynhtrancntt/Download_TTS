@@ -45,14 +45,8 @@ class AppConfig:
 
     HISTORY_FILE = DATA_DIR / "tts_history.json"
 
-
-class TTSConfig:
-    """
-    Cấu hình đặc biệt cho chức năng Text-to-Speech
-    Chứa các thiết lập về giọng nói, tốc độ, cao độ và xử lý
-    """
-
-    # Giá trị mặc định
+    TEMP_PREFIX = "edge_tts_parts_"  # Tiền tố file tạm
+    
     DEFAULT_VOICE = "vi-VN-HoaiMyNeural"  # Giọng tiếng Việt nữ mặc định
     DEFAULT_RATE = 0                      # Tốc độ bình thường (0%)
     DEFAULT_PITCH = 0                     # Cao độ bình thường (0%)
@@ -95,6 +89,6 @@ class TTSConfig:
     GENDER_OPTIONS = ["Female", "Male", "Any"]
 
     # Thiết lập file
-    TEMP_PREFIX = "edge_tts_parts_"  # Tiền tố file tạm
+   
     TEMP_DIR = Path(__file__).resolve().parent.parent.parent / \
         "output" / "temp"   # Thư mục lưu file tạm

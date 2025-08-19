@@ -12,11 +12,11 @@ from pathlib import Path
 import tempfile
 from datetime import datetime
 
-from app.appConfig import AppConfig
+from app.core.config import AppConfig
 from app.utils.audio_helpers import ms_to_mmss, get_mp3_duration_ms
 from app.utils.helps import hide_directory_on_windows
 from pydub import AudioSegment  # type: ignore
-
+import uuid
 
 class ListRow(QWidget):
 	"""Custom row widget với 3 cột sử dụng QGridLayout"""
@@ -254,8 +254,14 @@ class SegmentManager(QObject):
 			temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
 			temp_dir.mkdir(parents=True, exist_ok=True)
 			hide_directory_on_windows(temp_dir)
-			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-			merged_path = str(temp_dir / f"merged_{timestamp}.mp3")
+
+			# tạo thư mục con với UUID
+			temp_dir = temp_dir / str(uuid.uuid4())
+			temp_dir.mkdir(parents=True, exist_ok=True)
+			hide_directory_on_windows(temp_dir)
+			# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+			merged_path = str(temp_dir / f"merged-{uuid.uuid4()}.mp3")
 			final_audio.export(merged_path, format="mp3")
 			
 			# Lấy thời lượng chính xác sau khi export
@@ -479,12 +485,14 @@ class SegmentManager(QObject):
 			# Create silent audio segment for video
 			temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
 			temp_dir.mkdir(parents=True, exist_ok=True)
-			
-			# Ẩn thư mục tạm sau khi tạo (chỉ trên Windows)
+			hide_directory_on_windows(temp_dir)
+			# tạo thư mục con với UUID
+			temp_dir = temp_dir / str(uuid.uuid4())
+			temp_dir.mkdir(parents=True, exist_ok=True)
 			hide_directory_on_windows(temp_dir)
 			
-			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-			video_audio_path = str(temp_dir / f"video_audio_{timestamp}.mp3")
+			# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+			video_audio_path = str(temp_dir / f"{uuid.uuid4()}.mp3")
 			
 			# Create silent audio for video (3 seconds)
 			video_audio = AudioSegment.silent(duration=duration_ms)
@@ -506,12 +514,15 @@ class SegmentManager(QObject):
 			# Create temporary file for gap
 			temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
 			temp_dir.mkdir(parents=True, exist_ok=True)
-			
-			# Ẩn thư mục tạm sau khi tạo (chỉ trên Windows)
+			hide_directory_on_windows(temp_dir)
+
+			# tạo thư mục con với UUID
+			temp_dir = temp_dir / str(uuid.uuid4())
+			temp_dir.mkdir(parents=True, exist_ok=True)
 			hide_directory_on_windows(temp_dir)
 			
-			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-			gap_path = str(temp_dir / f"gap_{timestamp}.mp3")
+			# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+			gap_path = str(temp_dir / f"gap-{uuid.uuid4()}.mp3")
 			
 			# Export gap
 			gap.export(gap_path, format="mp3")
@@ -603,15 +614,21 @@ class SegmentManager(QObject):
 			
 			if path and duration:
 				# Lấy thông tin file
+				path_audio = os.path.abspath(path)
+				Path(path_audio).resolve()
 				file_size = self._get_file_size(path)
-				filename = os.path.basename(path)
+				suffix = Path(path_audio).resolve().suffix
+				filename = f"part_{(index+1):04d}{suffix}"
+				
 				
 				# Xác định loại segment
 				segment_type = "Audio"
-				if "gap_" in path:
+				if "gap-" in path:
 					segment_type = "Khoảng nghỉ"
-				elif "part1_" in path or "part2_" in path:
+				elif "split-" in path or "part2_" in path:
 					segment_type = "Phần được chia"
+				elif "merged" in path:
+					segment_type = "Gộp Video"
 				elif "video_audio_" in path:
 					segment_type = "Video placeholder"
 				
@@ -622,6 +639,7 @@ class SegmentManager(QObject):
 				# Tính vị trí trong playlist
 				cumulative_ms = sum((d or 0) for d in self.segment_durations[:index])
 				cumulative_formatted = ms_to_mmss(cumulative_ms)
+				path_Aduio = os.path.abspath(path)
 				
 				return {
 					'index': index + 1,
@@ -713,7 +731,7 @@ class SegmentManager(QObject):
 		# Hiển thị thời gian theo dạng: start->end/total với định dạng m:ss
 		start_ms = max(0, (cumulative_ms or 0) - (duration_ms or 0))
 		end_ms = cumulative_ms or 0
-		center_text = f"{self._format_m_ss(start_ms)}-{self._format_m_ss(end_ms)}/{self._format_m_ss(total_ms or 0)}"
+		center_text = f"{self._format_m_ss(start_ms)} — {self._format_m_ss(end_ms)} / {self._format_m_ss(total_ms or 0)}"
 		right_text = self._get_file_size(file_path)
 		
 		# Tạo ListRow widget
@@ -732,20 +750,16 @@ class SegmentManager(QObject):
 	def _format_segment_name(self, index: int, filename: str, duration_ms: int) -> str:
 		"""Format tên segment cho cột đầu tiên"""
 		# Xử lý các trường hợp đặc biệt
-		if filename.startswith("gap_"):
+		segment_time = ms_to_mmss(duration_ms)
+		if filename.startswith("gap-"):
 			# Khoảng nghỉ
-			segment_time = ms_to_mmss(duration_ms)
 			return f"{index:03d}. [KHOẢNG NGHỈ] — {segment_time}"
-		elif "part1_" in filename or "part2_" in filename:
-			# Phần được chia
-			original_name = filename.replace("part1_", "").replace("part2_", "")
-			part_num = "1" if "part1_" in filename else "2"
-			segment_time = ms_to_mmss(duration_ms)
-			return f"{index:03d}. {original_name} (Phần {part_num}) — {segment_time}"
+		elif "split-1" in filename or "split-2" in filename:
+			return f"{index:03d}. part_{index:04d}[split] — {segment_time}"
+		elif "merged" in filename:
+			return f"{index:03d}. part_{index:04d}[merged] — {segment_time}"
 		else:
-			# Segment thông thường
-			segment_time = ms_to_mmss(duration_ms)
-			return f"{index:03d}. {filename} — {segment_time}"
+			return f"{index:03d}. part_{index:04d} — {segment_time}"
 	
 	def _format_m_ss(self, ms: int) -> str:
 		"""Format thời gian kiểu m:ss (phút không padding, giây 2 chữ số)."""
@@ -790,15 +804,18 @@ class SegmentManager(QObject):
 			# Create temporary files
 			temp_dir = Path(tempfile.mkdtemp(prefix=AppConfig.TEMP_PREFIX))
 			temp_dir.mkdir(parents=True, exist_ok=True)
-			
-			# Ẩn thư mục tạm sau khi tạo (chỉ trên Windows)
+			hide_directory_on_windows(temp_dir)
+
+			# tạo thư mục con với UUID
+			temp_dir = temp_dir / str(uuid.uuid4())
+			temp_dir.mkdir(parents=True, exist_ok=True)
 			hide_directory_on_windows(temp_dir)
 			
 			timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 			base_name = os.path.splitext(os.path.basename(audio_path))[0]
 			
-			part1_path = str(temp_dir / f"part1_{base_name}_{timestamp}.mp3")
-			part2_path = str(temp_dir / f"part2_{base_name}_{timestamp}.mp3")
+			part1_path = str(temp_dir / f"split-1-{uuid.uuid4()}.mp3")
+			part2_path = str(temp_dir / f"split-2-{uuid.uuid4()}.mp3")
 			
 			# Export parts
 			part1.export(part1_path, format="mp3")
