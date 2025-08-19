@@ -1,44 +1,51 @@
-# Import dependencies
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-                               QLabel, QScrollArea, QListWidget, QListWidgetItem
-                               )
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
+    QLabel, QListWidget, QListWidgetItem
+)
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QPoint
 
-
-from datetime import datetime
-from pathlib import Path
 from typing import Optional, Callable, Tuple
+from datetime import datetime
+
 from app.appConfig import AppConfig
 
 
-class HistoryPanel(QWidget):
+class HistoryPanelTab(QWidget):
+    """
+    Phiên bản HistoryPanel dành cho từng tab, có thêm các nút thao tác ở footer
+    và callback tùy chỉnh.
+    """
 
-    """Improved history panel with better performance and UX"""
-
-    def __init__(self, title_text: str = "Lịch sử",
-                 item_factory: Optional[Callable] = None,
-                 on_item_selected: Optional[Callable] = None,
-                 close_callback: Optional[Callable] = None,
-                 parent: Optional[QWidget] = None):
+    def __init__(
+        self,
+        title_text: str = "Lịch sử",
+        item_factory: Optional[Callable] = None,
+        on_item_selected: Optional[Callable] = None,
+        close_callback: Optional[Callable] = None,
+        on_play: Optional[Callable] = None,
+        on_delete: Optional[Callable] = None,
+        on_open_root: Optional[Callable] = None,
+        parent: Optional[QWidget] = None,
+    ):
         super().__init__(parent)
 
         self.setFixedWidth(AppConfig.HISTORY_PANEL_WIDTH)
-        # self.setStyleSheet()
         self.item_factory = item_factory
         self.on_item_selected = on_item_selected
         self.close_callback = close_callback
+        self._on_play_cb = on_play
+        self._on_delete_cb = on_delete
+        self._on_open_root_cb = on_open_root
 
         self._setup_ui(title_text)
         self.hide()
 
     def _setup_ui(self, title_text: str):
-        """Setup the history panel UI"""
-        self.setObjectName("HistoryPanel")  # Đặt ID cho HistoryPanel
+        self.setObjectName("HistoryPanel")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin để thiết kế lại
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Background và viền phân biệt - use new styling
         from app.ui.styles import AppStyles
         self.setStyleSheet(f"""
             QWidget#HistoryPanel {{
@@ -46,21 +53,15 @@ class HistoryPanel(QWidget):
                 border-radius: 8px;
                 border: 1px solid {AppStyles.COLORS['border']};
             }}
-
-            /* Footer container background */
-            QWidget#HistoryPanel QWidget#Footer {{
-                background-color: {AppStyles.COLORS['background']};
-            }}
-
         """)
-        # Header nhỏ gọn
+
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(12, 8, 12, 6)
 
         self.title = QLabel(title_text)
         self.title.setStyleSheet(f"""
-            color: {AppStyles.COLORS['text_primary']}; 
-            font-weight: 600; 
+            color: {AppStyles.COLORS['text_primary']};
+            font-weight: 600;
             font-size: 14px;
         """)
 
@@ -87,129 +88,93 @@ class HistoryPanel(QWidget):
         header_layout.addWidget(close_btn)
         layout.addLayout(header_layout)
 
-        # Thêm đường viền phân biệt
         separator = QWidget()
         separator.setFixedHeight(1)
         separator.setStyleSheet(
             f"background-color: {AppStyles.COLORS['border']};")
         layout.addWidget(separator)
 
-        # QListWidget nhỏ gọn (đặt TRƯỚC footer để footer nằm dưới cùng)
         self.history_list = QListWidget()
         self.history_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
-        self.history_list.setStyleSheet("""
-             QListWidget {
-                background: #0f172a;
-                border: none;
-                outline: none;
-                spacing: 0px;
-                border-radius: 0px;
-            }
-            QListWidget::item {
-                background: transparent;
-                border: none;
-                padding: 3px;
-                margin: 0px;
-
-            }
-            QListWidget::item:selected {
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background: #334155;
-                width: 4px;
-                border-radius: 2px;
-                margin: 0px;
-            }
-            QScrollBar::handle:vertical {
-                background: #475569;
-                border-radius: 2px;
-                min-height: 15px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: #64748b;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-        """)
-        self.history_list.setSpacing(6)
+        self.history_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
         self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.history_list.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.history_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         layout.addWidget(self.history_list)
 
-        # Footer separator + 2 hàng nút (đặt SAU list để luôn ở cuối)
-        footer_sep = QWidget()
-        footer_sep.setFixedHeight(1)
-        footer_sep.setStyleSheet(
-            f"background-color: {AppStyles.COLORS['border']};")
-        layout.addWidget(footer_sep)
-
-        # Wrap footer in QWidget to style background via QSS
-        footer_container = QWidget()
-        footer_container.setObjectName("Footer")
-        footer = QVBoxLayout(footer_container)
-        footer.setContentsMargins(8, 6, 8, 8)
-        footer.setSpacing(6)
-
-        # Hàng 1: Phát + Xóa (căn giữa)
-        row1_widget = QWidget()
-        row1 = QHBoxLayout(row1_widget)
+        footer = QHBoxLayout()
         self.btn_play = QPushButton("Phát")
+        self.btn_play.clicked.connect(self._on_play_selected)
         self.btn_del = QPushButton("Xóa")
-        row1.addWidget(self.btn_play)
-        row1.addWidget(self.btn_del)
-
-        # Hàng 2: Thư mục (căn giữa)
-        row2_widget = QWidget()
-        row2 = QHBoxLayout(row2_widget)
+        self.btn_del.clicked.connect(self._delete_selected)
         self.btn_open = QPushButton("Thư mục")
-        # row2.addStretch()
-        row2.addWidget(self.btn_open)
-        row2.addStretch()
+        self.btn_open.clicked.connect(self._open_root)
+        for b in (self.btn_play, self.btn_del, self.btn_open):
+            footer.addWidget(b)
+        layout.addLayout(footer)
 
-        footer.addWidget(row1_widget)
-        # footer.addWidget(row2_widget)
-        layout.addWidget(footer_container)
+    def _get_selected_item_widget(self) -> Optional[QWidget]:
+        idx = self.history_list.currentRow()
+        if idx < 0:
+            return None
+        item: QListWidgetItem = self.history_list.item(idx)
+        return self.history_list.itemWidget(item)
+
+    def _on_play_selected(self):
+        widget = self._get_selected_item_widget()
+        if self._on_play_cb and widget is not None:
+            try:
+                # Truyền text hoặc meta nếu có
+                payload = getattr(widget, "_meta", None) or getattr(widget, "_text", None)
+                self._on_play_cb(payload)
+            except Exception:
+                pass
+
+    def _delete_selected(self):
+        idx = self.history_list.currentRow()
+        if idx < 0:
+            return
+        try:
+            item = self.history_list.takeItem(idx)
+            del item
+            if self._on_delete_cb:
+                self._on_delete_cb(idx)
+        except Exception:
+            pass
+
+    def _open_root(self):
+        if self._on_open_root_cb:
+            try:
+                self._on_open_root_cb()
+            except Exception:
+                pass
 
     def add_history(self, text: str, meta: Optional[dict] = None):
-        """Add a new history item using QListWidget"""
         timestamp = datetime.now().strftime("%H:%M %d/%m/%Y")
-        default_lang = "vi-VN"
-
         if self.item_factory:
             item_widget = self.item_factory(text, timestamp, meta or {})
             self._connect_item_signals(item_widget)
 
             list_item = QListWidgetItem()
             list_item.setSizeHint(item_widget.sizeHint())
-
             self.history_list.insertItem(0, list_item)
             self.history_list.setItemWidget(list_item, item_widget)
 
     def _connect_item_signals(self, item):
-        """Connect item selection signal if available"""
         if self.on_item_selected and hasattr(item, "selected"):
             try:
                 item.selected.connect(self.on_item_selected)
             except Exception:
-                pass  # Fail silently if connection fails
+                pass
 
     def clear_history(self):
-        """Clear all history items"""
-        self._clear_history_silent()
-
-    def _clear_history_silent(self):
-        """Clear all history items from QListWidget"""
         self.history_list.clear()
 
     def show_with_animation(self, parent_width: int):
-        """Slide in the panel from the right with animation"""
         self.show()
         top, height = self._calculate_geometry()
         end_x = parent_width - self.width()
         start_x = parent_width
-        # Start off-screen at the right edge
         self.setGeometry(end_x, top, self.width(), height)
         self.move(QPoint(start_x, top))
         anim = QPropertyAnimation(self, b"pos", self)
@@ -221,32 +186,25 @@ class HistoryPanel(QWidget):
         self._anim_show = anim
 
     def close_panel(self):
-        """Close panel with slide-out animation"""
         self.hide_with_animation()
 
     def dock_right(self):
-        """Dock panel to the right side of parent"""
         if not self.parent():
             return
-
         parent = self.parent()
         top, height = self._calculate_geometry()
         x = parent.width() - self.width()
         self.setGeometry(x, top, self.width(), height)
 
     def _calculate_geometry(self) -> Tuple[int, int]:
-        """Calculate top position and height for the panel"""
         top = 0
         parent = self.parent()
-
         if hasattr(parent, "menuBar") and parent.menuBar():
             top = parent.menuBar().height()
-
         height = parent.height() - top
         return top, height
 
     def hide_with_animation(self):
-        """Slide out the panel to the right and hide when finished"""
         parent = self.parent()
         if not parent:
             self.hide()
@@ -272,3 +230,5 @@ class HistoryPanel(QWidget):
         anim.finished.connect(_after)
         anim.start()
         self._anim_hide = anim
+
+

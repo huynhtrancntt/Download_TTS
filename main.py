@@ -21,6 +21,7 @@ from typing import Optional, List
 from app.historyPanel import HistoryPanel
 from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
+from app.tabs.convert_tab import ConvertTab
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
 from app.utils.helps import clean_all_temp_parts
@@ -154,18 +155,15 @@ class MainWindow(QMainWindow):
         """
         # Tạo tab TTS
         self.tab_tts = TTSTab(self)
-        
-        # Có thể thêm các tab khác trong tương lai
-        # self.tab_convert = ConvertTab(self)
-        # self.tab_simple = SimpleTab(self)
+        # Tạo tab Convert (mới)
+        self.tab_convert = ConvertTab(self)
 
         # Lưu danh sách tất cả tabs để quản lý
-        self._all_tabs: List[UIToolbarTab] = [self.tab_tts]
+        self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_convert]
 
         # Thêm tabs vào widget
         self.tabs.addTab(self.tab_tts, "Text to Speech")
-        # self.tabs.addTab(self.tab_convert, "Convert")
-        # self.tabs.addTab(self.tab_simple, "Simple")
+        self.tabs.addTab(self.tab_convert, "Convert")
 
     def _initialize_ui_state(self) -> None:
         """

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
 
 )
 
-from typing import Optional, Callable
+from typing import Optional, Callable, Type
 from app.historyPanel import HistoryPanel
 from app.historyFeature import HistoryFeature
 
@@ -21,20 +21,24 @@ class UIToolbarTab(QWidget):
         root_layout.addLayout(self.toolbar)
 
     def enable_history(self, hist_title: str, item_factory: Callable,
-                       on_item_selected: Optional[Callable] = None) -> HistoryFeature:
+                       on_item_selected: Optional[Callable] = None,
+                       panel_cls: Optional[Type[QWidget]] = None,
+                       **panel_kwargs) -> HistoryFeature:
         """Enable history functionality for this tab"""
         self.history = HistoryFeature(
             parent_main=self.parent_main,
             hist_title=hist_title,
             item_factory=item_factory,
-            on_item_selected=on_item_selected
+            on_item_selected=on_item_selected,
+            panel_cls=panel_cls,
+            **panel_kwargs
         )
         return self.history
 
-    def append_history(self, text: str, lang: str = "vi-VN", meta: Optional[dict] = None):
+    def append_history(self, text: str, meta: Optional[dict] = None):
         """Add item to history"""
         if self.history:
-            self.history.panel.add_history(text, lang=lang, meta=meta or {})
+            self.history.panel.add_history(text, meta=meta or {})
 
     def has_history(self) -> bool:
         """Check if tab has history enabled"""

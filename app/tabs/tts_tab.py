@@ -93,20 +93,50 @@ class TTSTab(UIToolbarTab):
         """Setup history system"""
         hist = self.enable_history(
             hist_title="Lịch sử TTS",
-            item_factory=lambda text, ts, lang, meta: TTSHistoryItem(
-                text, ts, lang, meta),
+            item_factory=lambda text, ts, meta: TTSHistoryItem(
+                text, ts, meta),
             on_item_selected=self._on_history_selected
         )
-
-        # Add demo history
-        self.append_history(
-            "Xin chào, tôi là trợ lý AI ...",
-            meta={"demo": True, "priority": "high"}
-        )
-        self.append_history(
-            "Hôm nay thời tiết thế nào?",
-            meta={"demo": True, "priority": "normal"}
-        )
+        # Không thêm demo; sẽ load khi người dùng mở panel
+        self.append_history("dòng 1", {"lang": "vi-VN"})
+        self.append_history("dòng 2", {"lang": "vi-VN"})
+        self.append_history("dòng 3", {"lang": "vi-VN"})
+        self.append_history("dòng 4", {"lang": "vi-VN"})
+        self.append_history("dòng 5", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 6", {"lang": "vi-VN"})
+        self.append_history("dòng 7", {"lang": "vi-VN"})
+        
 
     def _setup_header_section(self, root_layout: QVBoxLayout) -> None:
         """Setup header section"""
@@ -574,7 +604,19 @@ class TTSTab(UIToolbarTab):
     def append_history(self, text: str, meta: Optional[dict] = None) -> None:
         """Add item to TTS history"""
         if self.history:
-            self.history.panel.add_history(text, meta=meta or {})
+            # Ensure meta exists and inject current language
+            meta_payload = dict(meta) if isinstance(meta, dict) else {}
+            try:
+                if hasattr(self, 'cmb_lang') and self.cmb_lang is not None:
+                    # Prefer stored userData (code), fallback to text
+                    lang_code = self.cmb_lang.currentData()
+                    if not lang_code:
+                        lang_code = self.cmb_lang.currentText()
+                    if 'lang' not in meta_payload and lang_code:
+                        meta_payload['lang'] = lang_code
+            except Exception:
+                pass
+            self.history.panel.add_history(text, meta=meta_payload)
 
     def _on_history_selected(self, text: str) -> None:
         """Callback when history item is selected"""
