@@ -22,6 +22,7 @@ from app.historyPanel import HistoryPanel
 from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
 from app.tabs.convert_tab import ConvertTab
+from app.tabs.downloadvideo_tab import DownloadVideoTab
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
 from app.utils.helps import clean_all_temp_parts
@@ -173,6 +174,8 @@ class MainWindow(QMainWindow):
         """
         # Tạo tab TTS
         self.tab_tts = TTSTab(self)
+        # Tạo tab Download Video
+        self.tab_downloadvideo = DownloadVideoTab(self)
         # Tạo tab Convert (mới)
         self.tab_convert = ConvertTab(self)
 
@@ -180,8 +183,9 @@ class MainWindow(QMainWindow):
         self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_convert]
 
         # Thêm tabs vào widget
+        self.tabs.addTab(self.tab_downloadvideo, "Download Video")
         self.tabs.addTab(self.tab_tts, "Text to Speech")
-        self.tabs.addTab(self.tab_convert, "Convert")
+      
 
     def _initialize_ui_state(self) -> None:
         """
@@ -652,46 +656,57 @@ class MainWindow(QMainWindow):
 
         # Handle progress section visibility based on tab
         if hasattr(self, 'progress_widget'):
-            if tab_index == 2:  # Tab 3 (Simple) - Hide progress section completely
-                self.progress_widget.setVisible(False)
-                self.status.showMessage("Tab Simple - Đã ẩn progress section")
-            else:  # Tab 1 (TTS) or Tab 2 (Convert) - Show progress section
+            self.progress_widget.setVisible(False)
+            if tab_index == 1:
+                self.status.showMessage("Đang sẵn sàng với tab text to speech.",10_000)
                 self.progress_widget.setVisible(True)
-
-                # Reset toggle button states when switching to tab 2
-                if tab_index == 1:  # Convert tab
-                    # Ensure all elements are visible and buttons show correct text
-                    if hasattr(self, 'progress_bar') and self.progress_bar:
-                        self.progress_bar.setVisible(True)
-                    if hasattr(self, '_progress_title') and self._progress_title:
-                        self._progress_title.setVisible(True)
-                    if hasattr(self, 'output_list') and self.output_list:
-                        self.output_list.setVisible(True)
-
-                    # Show progress control buttons
-                    buttons = [self.btn_start, self.btn_pause,
-                               self.btn_resume, self.btn_stop]
-                    for btn in buttons:
-                        if btn:
-                            btn.setVisible(True)
-
-                    # Reset Convert tab toggle buttons to default state
-                    convert_tab = self._all_tabs[1]
-                    if hasattr(convert_tab, 'btn_toggle_progress'):
-                        convert_tab.btn_toggle_progress.setText(
-                            "🔽 Ẩn Progress Bar")
-                    if hasattr(convert_tab, 'btn_toggle_log'):
-                        convert_tab.btn_toggle_log.setText("🔽 Ẩn Log")
-
-                    self.status.showMessage(
-                        "Tab Convert - Đã hiện progress section")
-                # Tab 1 (TTS) - Hide progress bar initially, keep log visible
-                elif tab_index == 0:
-                    self._hide_progress_bar()
+                self._hide_progress_bar()
                     # Keep log visible
-                    if hasattr(self, 'output_list') and self.output_list:
+                if hasattr(self, 'output_list') and self.output_list:
                         self.output_list.setVisible(True)
-                    self.status.showMessage("Tab TTS - Progress bar ẩn, log hiển thị")
+            else: #inde  0
+                self.status.showMessage("Đang sẵn sàng với tab download video.",10_000)
+                self.progress_widget.setVisible(True)
+                self._hide_progress_bar()
+
+            # if tab_index == 2:  # Tab 3 (Simple) - Hide progress section completely
+                
+            #     self.status.showMessage("Tab Simple - Đã ẩn progress section")
+            # else:  # Tab 1 (TTS) or Tab 2 (Convert) - Show progress section
+            #     self.progress_widget.setVisible(True)
+
+            #     # Reset toggle button states when switching to tab 2
+            #     if tab_index == 1:  # Convert tab
+            #         # Ensure all elements are visible and buttons show correct text
+            #         if hasattr(self, 'progress_bar') and self.progress_bar:
+            #             self.progress_bar.setVisible(True)
+            #         if hasattr(self, '_progress_title') and self._progress_title:
+            #             self._progress_title.setVisible(True)
+            #         if hasattr(self, 'output_list') and self.output_list:
+            #             self.output_list.setVisible(True)
+
+            #         # Show progress control buttons
+            #         buttons = [self.btn_start, self.btn_pause,
+            #                    self.btn_resume, self.btn_stop]
+            #         for btn in buttons:
+            #             if btn:
+            #                 btn.setVisible(True)
+
+            #         # Reset Convert tab toggle buttons to default state
+            #         convert_tab = self._all_tabs[1]
+            #         if hasattr(convert_tab, 'btn_toggle_progress'):
+            #             convert_tab.btn_toggle_progress.setText(
+            #                 "🔽 Ẩn Progress Bar")
+            #         if hasattr(convert_tab, 'btn_toggle_log'):
+            #             convert_tab.btn_toggle_log.setText("🔽 Ẩn Log")
+
+            #         self.status.showMessage(
+            #             "Tab Convert - Đã hiện progress section")
+            #     # Tab 1 (TTS) - Hide progress bar initially, keep log visible
+            #     elif tab_index == 0:
+                    
+            #         self.status.showMessage("Đang sẵn sàng với tab text to speech.",10_000)
+                    # Sau 10 giây tự động xóa
 
             # Safe layout update after tab change
             self._safe_layout_update()
