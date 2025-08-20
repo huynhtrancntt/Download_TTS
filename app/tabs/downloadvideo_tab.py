@@ -16,7 +16,7 @@ from app.core.config import AppConfig
 
 from pathlib import Path
 
-from app.workers.download_Worker import DownloadVideo as DownloadVideoWorker
+from app.workers.download_Worker import DownloadVideo
 import os
 from datetime import datetime
 
@@ -226,7 +226,7 @@ class DownloadVideoTab(UIToolbarTab):
         # if self.worker and self.worker.isRunning():
         #     self.worker.stop()
         self.stopped = False
-        
+
         urls = [u.strip()
                 for u in self.url_inputdownloadvideo.toPlainText().splitlines() if u.strip()]
         if not urls:
@@ -289,16 +289,8 @@ class DownloadVideoTab(UIToolbarTab):
     def stop_download(self):
         self.stopped = True
 
-        for thread in list(self.active_threads):
-            try:
-                thread.stop()
-                if not thread.wait(3000):
-                    thread.terminate()
-                    thread.wait(1000)
-            except Exception:
-                pass
-
-        self.active_threads.clear()
+        for thread in self.active_threads:
+            thread.stop_flag = True
 
         self._add_log_item("⏹ Đang dừng các tiến trình tải...")
         self.stop_button.setEnabled(False)
@@ -309,9 +301,12 @@ class DownloadVideoTab(UIToolbarTab):
         while self.running < self.max_workers and self.index <= len(self.urls) and not self.stopped:
             url = self.urls[self.index - 1]
             worker_id = self.running + 1
-            thread = DownloadVideoWorker(
-                urls=[url],
-                video_mode=(self.video_mode == "Video"),
+            thread = DownloadVideo(
+                url=url,
+                video_index=self.index,
+                total_urls=len(self.urls),
+                worker_id=worker_id,
+                video_mode=self.video_mode,
                 audio_only=self.audio_only_flag,
                 sub_mode=self.sub_mode_flag,
                 sub_lang=self.sub_lang_code_flag,
@@ -320,29 +315,24 @@ class DownloadVideoTab(UIToolbarTab):
                 subtitle_only=self.subtitle_only_flag,
                 custom_folder_name=self.download_folder
             )
-            thread.message.connect(self._add_log_item)
-            thread.finished.connect(lambda _msg, t=thread: self.handle_thread_done(t))
+            thread.message_signal.connect(self._add_log_item)
+            thread.finished_signal.connect(self.handle_thread_done)
             thread.progress_signal.connect(self.update_progress)
+            thread.error_signal.connect(self.error_thread)
             self.active_threads.append(thread)
             thread.start()
             self.running += 1
             self.index += 1
 
-    def handle_thread_done(self, thread):
+    def handle_thread_done(self):
         self.running -= 1
-        try:
-            if thread in self.active_threads:
-                self.active_threads.remove(thread)
-            thread.deleteLater()
-        except Exception:
-            pass
         if not self.stopped and self.index <= len(self.urls):
             self.download_next_batch()
         elif self.running == 0:
             if self.stopped:
                 self._add_log_item("⏹ Đã dừng toàn bộ tiến trình.")
             else:
-                self.progress.setValue(100)
+                # self.progress.setValue(100)
                 self._add_log_item("✅ Tải xong tất cả video.")
                 self._add_log_item(
                     f"📂 Video được lưu tại: {self.download_folder}")
