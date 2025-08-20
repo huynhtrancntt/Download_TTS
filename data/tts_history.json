@@ -739,5 +739,31 @@
         "started_at": "2025-08-20T10:46:06.200587",
         "finished_at": "2025-08-20T10:46:06.200587",
         "status": "success"
+    },
+    {
+        "input_file": "eee",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 1,
+        "started_at": "2025-08-20T20:50:04.870837",
+        "finished_at": "2025-08-20T20:50:04.870837",
+        "status": "success"
+    },
+    {
+        "input_file": "dđ",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 1,
+        "started_at": "2025-08-20T21:24:26.732841",
+        "finished_at": "2025-08-20T21:24:26.732841",
+        "status": "success"
     }
 ]

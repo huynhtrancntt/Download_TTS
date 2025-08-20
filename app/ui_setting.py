@@ -646,6 +646,35 @@ def get_scrollbar_styles():
     """
 
 
+def get_button_style_1__styles():
+    """Get button styles"""
+    return f"""
+        QPushButton#btn_style_1{{
+                background-color: #28a745;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                border-radius: 5px;
+            }}
+        QPushButton#btn_style_1:hover {{
+                background-color: #218838;
+            }}
+        QPushButton#btn_style_1:disabled {{
+                background-color: #6c757d;
+            }}
+        QPushButton#btn_style_skip {{
+            background-color: #6c757d;
+            color: white;
+            font-weight: bold;
+            padding: 10px 20px;
+            border-radius: 5px;
+        }}
+        QPushButton#btn_style_skip:hover {{
+            background-color: #545b62;
+        }}
+    """
+
+
 def show_about_ui(self):
     about_text = ABOUT_TEMPLATE.format(version=self.version)
     QMessageBox.about(self, "Về ứng dụng", about_text)
@@ -672,7 +701,8 @@ def _init_addStyle(self):
         get_group_box_styles() +
         get_frame_styles() +
         get_player_styles() +
-        get_scrollbar_styles()
+        get_scrollbar_styles() +
+        get_button_style_1__styles()
     )
 
     self.setStyleSheet(combined_styles)

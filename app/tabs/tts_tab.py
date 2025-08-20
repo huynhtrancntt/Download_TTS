@@ -25,7 +25,7 @@ import tempfile
 from app.uiToolbarTab import UIToolbarTab
 from app.core.config import AppConfig
 from app.history.historyItem_TTS import TTSHistoryItem
-from app.workers import MTProducerWorker
+from app.workers.TTS_workers import MTProducerWorker
 
 import json
 from app.utils.helps import (
@@ -206,7 +206,8 @@ class TTSTab(UIToolbarTab):
             placeholderText="Dán văn bản hoặc bấm Mở .txt"
         )
         # self.text_input_edge_tts.setMaximumHeight(150)  # Giới hạn chiều cao tối đa 150px
-        self.text_input_edge_tts.setMinimumHeight(200)  # Chiều cao tối thiểu 100px
+        self.text_input_edge_tts.setMinimumHeight(
+            200)  # Chiều cao tối thiểu 100px
         content_layout.addWidget(self.text_input_edge_tts, 2)
 
     def _create_configuration_controls(self, content_layout: QVBoxLayout) -> None:
@@ -590,7 +591,6 @@ class TTSTab(UIToolbarTab):
     #             pass
     #         self.history.panel.add_history(text, meta=meta_payload)
 
-
     def _on_break_duration_changed(self, duration_text: str) -> None:
         """Callback when break duration combo box changes"""
         if hasattr(self, 'btn_break_segment') and hasattr(self, '_update_break_button_state'):
@@ -715,8 +715,6 @@ class TTSTab(UIToolbarTab):
         else:
             self.btn_break_segment.setToolTip(
                 "Không thể ngắt đoạn - vui lòng phát audio")
-
-
 
     def on_audio_status_changed(self, status: str) -> None:
         """Callback when audio status changes from AudioPlayer"""

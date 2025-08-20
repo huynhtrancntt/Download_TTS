@@ -195,3 +195,5 @@ secrets.json
 .env.local
 ffmpeg.exe
 ffprobe.exe
+yt-dlp.exe
+Update.exe
