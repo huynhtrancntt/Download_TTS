@@ -13,6 +13,7 @@ APP_VERSION = "1.6.0"  # Placeholder for actual version, replace with your app's
 COLORS = {
     'primary_bg': '#0f172b',
     'secondary_bg': '#1e293b',
+    'surface': '#1e293b',  # Màu bề mặt cho scrollbar
     'menu_bg': '#0d2538',
     'border': '#334155',
     'text_primary': '#e2e8f0',
@@ -575,6 +576,76 @@ def get_player_styles():
     """
 
 
+def get_scrollbar_styles():
+    """Get scrollbar styles for all scrollable widgets"""
+    return f"""
+        /* ----- Thanh trượt dọc (vertical scrollbar) ----- */
+        QScrollBar:vertical {{
+            background: {COLORS['surface']};
+            width: 0px;
+            border-radius: 4px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:vertical {{
+            background: {COLORS['border']};
+            border-radius: 4px;
+            min-height: 20px;
+        }}
+        QScrollBar::handle:vertical:hover {{
+            background: {COLORS['accent_gray']};
+        }}
+        QScrollBar::handle:vertical:pressed {{
+            background: {COLORS['accent_blue']};
+        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            height: 0px;
+        }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
+            background: none;
+        }}
+
+        /* ----- Thanh trượt ngang (horizontal scrollbar) ----- */
+        QScrollBar:horizontal {{
+            background: {COLORS['surface']};
+            height: 8px;
+            border-radius: 4px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {COLORS['border']};
+            border-radius: 4px;
+            min-width: 20px;
+        }}
+        QScrollBar::handle:horizontal:hover {{
+            background: {COLORS['accent_gray']};
+        }}
+        QScrollBar::handle:horizontal:pressed {{
+            background: {COLORS['accent_blue']};
+        }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0px;
+        }}
+        QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+            background: none;
+        }}
+
+        /* ----- Thanh trượt cho QListWidget và QTextEdit ----- */
+        QListWidget QScrollBar:vertical, QTextEdit QScrollBar:vertical {{
+            background: {COLORS['secondary_bg']};
+            width: 6px;
+            border-radius: 3px;
+        }}
+        QListWidget QScrollBar::handle:vertical, QTextEdit QScrollBar::handle:vertical {{
+            background: {COLORS['accent_gray']};
+            border-radius: 3px;
+            min-height: 15px;
+        }}
+        QListWidget QScrollBar::handle:vertical:hover, QTextEdit QScrollBar::handle:vertical:hover {{
+            background: {COLORS['accent_blue']};
+        }}
+    """
+
+
 def show_about_ui(self):
     about_text = ABOUT_TEMPLATE.format(version=self.version)
     QMessageBox.about(self, "Về ứng dụng", about_text)
@@ -600,7 +671,8 @@ def _init_addStyle(self):
         get_tab_styles() +
         get_group_box_styles() +
         get_frame_styles() +
-        get_player_styles()
+        get_player_styles() +
+        get_scrollbar_styles()
     )
 
     self.setStyleSheet(combined_styles)

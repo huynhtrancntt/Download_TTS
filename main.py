@@ -110,6 +110,10 @@ class MainWindow(QMainWindow):
         else:
             print(f"Cảnh báo: Không tìm thấy icon tại {icon_path}")
 
+        # Thiết lập kích thước cửa sổ 400x600
+        self.setMinimumSize(800, 700)  # Kích thước tối thiểu 400x600
+        self.resize(800, 700)  # Kích thước mặc định khi khởi động 400x600
+
         # Có thể bật lại nếu cần thiết lập kích thước cố định
         # self.setMinimumSize(*AppConfig.MIN_WINDOW_SIZE)
         # self.resize(*AppConfig.DEFAULT_WINDOW_SIZE)
@@ -122,12 +126,26 @@ class MainWindow(QMainWindow):
         Thiết lập các thành phần giao diện chính
         Bao gồm: menu, tabs, progress bar, overlay
         """
-        # Tạo widget trung tâm và layout chính
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setSpacing(0)  # Giảm khoảng cách giữa các widget
-        main_layout.setContentsMargins(0, 0, 0, 0)  # Bỏ margin để tối đa hóa không gian
+        # Tạo scroll area thay vì widget thông thường
+        from PySide6.QtWidgets import QScrollArea
+        
+        # Tạo scroll area làm central widget
+        self.scroll_area = QScrollArea()
+        self.setCentralWidget(self.scroll_area)
+        
+        # Tạo widget chứa nội dung
+        self.content_widget = QWidget()
+        self.scroll_area.setWidget(self.content_widget)
+        
+        # Thiết lập scroll area
+        self.scroll_area.setWidgetResizable(True)  # Widget tự động resize
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Hiện thanh trượt dọc khi cần
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Hiện thanh trượt ngang khi cần
+        
+        # Tạo layout chính cho content widget
+        main_layout = QVBoxLayout(self.content_widget)
+        main_layout.setSpacing(2)  # Giảm khoảng cách giữa các widget
+        main_layout.setContentsMargins(5, 5, 5, 5)  # Giảm margin
 
         # Thiết lập menu và status bar TRƯỚC - để các tab có thể truy cập
         self._setup_menu_and_status()

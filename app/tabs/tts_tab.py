@@ -205,6 +205,8 @@ class TTSTab(UIToolbarTab):
         self.text_input_edge_tts = QTextEdit(
             placeholderText="Dán văn bản hoặc bấm Mở .txt"
         )
+        # self.text_input_edge_tts.setMaximumHeight(150)  # Giới hạn chiều cao tối đa 150px
+        self.text_input_edge_tts.setMinimumHeight(200)  # Chiều cao tối thiểu 100px
         content_layout.addWidget(self.text_input_edge_tts, 2)
 
     def _create_configuration_controls(self, content_layout: QVBoxLayout) -> None:
@@ -382,6 +384,7 @@ class TTSTab(UIToolbarTab):
 
         # Create segments list widget với custom row widget
         self.list_segments = QListWidget()
+        self.list_segments.setMinimumHeight(200)
         segments_layout.addWidget(self.list_segments, 1)
 
         # Add empty state message
@@ -399,7 +402,7 @@ class TTSTab(UIToolbarTab):
 
     def _create_status_label(self, content_layout: QVBoxLayout) -> None:
         """Create status label"""
-        self.lbl_status = QLabel("Sẵn sàng")
+        self.lbl_status = QLabel("")
         self.lbl_status.setStyleSheet(
             "color: #888; font-size: 12px; padding: 5px;"
         )
@@ -437,6 +440,8 @@ class TTSTab(UIToolbarTab):
             self.on_audio_playback_state_changed)
         self.audio_player.audio_split_requested.connect(
             self.on_audio_split_requested)
+        self.audio_player.status_signal.connect(
+            self.on_audio_status_changed)
 
         # Update break segment button state based on audio position
         self.audio_player.position_changed.connect(
@@ -710,6 +715,13 @@ class TTSTab(UIToolbarTab):
         else:
             self.btn_break_segment.setToolTip(
                 "Không thể ngắt đoạn - vui lòng phát audio")
+
+
+
+    def on_audio_status_changed(self, status: str) -> None:
+        """Callback when audio status changes from AudioPlayer"""
+        self.lbl_status.setText(status)
+        self._add_log_item(status)
 
     # ==================== Event Handlers ====================
 
@@ -1138,7 +1150,7 @@ class TTSTab(UIToolbarTab):
                 self.parent_main.progress_bar.setVisible(True)
         except Exception as e:
             print(f"[TTS PROGRESS ERROR] {e}")
-        self.lbl_status.setText("Sẵn sàng")
+        self.lbl_status.setText("")
 
         # Reset break segment controls
         if hasattr(self, 'cmb_break_duration'):
@@ -1236,7 +1248,7 @@ class TTSTab(UIToolbarTab):
         self._reset_progress()
 
         # Log end
-        self._add_log_item("⏹ Đã kết thúc TTS", "info")
+        self._add_log_item("⏹ Đã kết thúc.", "info")
 
     # ==================== Worker callbacks ====================
 
@@ -1301,7 +1313,7 @@ class TTSTab(UIToolbarTab):
         self._reset_progress()
 
         # Log completion
-        self._add_log_item("✅ TTS hoàn thành tất cả segments", "info")
+        self._add_log_item("✅ Đã hoàn thành tất cả segments", "info")
 
     def on_error(self, msg: str) -> None:
         """Callback for errors"""
@@ -1312,7 +1324,7 @@ class TTSTab(UIToolbarTab):
         # Log error
         self._add_log_item(f"❌ Lỗi TTS: {msg}", "error")
 
-    def _add_log_item(self, message: str, level: str = "info") -> None:
+    def _add_log_item(self, message: str, level: str = "") -> None:
         """Add log item to main window's output_list if available"""
         try:
             # Try to access main window's output_list

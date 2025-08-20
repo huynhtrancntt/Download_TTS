@@ -47,7 +47,7 @@ class AudioPlayer(QWidget):
     segment_changed = Signal(int)  # Segment hiện tại
     timeline_clicked = Signal(int)  # Timeline được click tại vị trí (ms)
     audio_split_requested = Signal(int, int)  # Yêu cầu cắt audio (segment_index, split_position_ms)
-    
+    status_signal = Signal(str)
     def __init__(self, parent=None):
         super().__init__(parent)
         
@@ -121,7 +121,7 @@ class AudioPlayer(QWidget):
         # Status label
         self.lbl_status = QLabel("Sẵn sàng")
         self.lbl_status.setStyleSheet("color: #888; font-size: 12px; padding: 5px;")
-        layout.addWidget(self.lbl_status)
+        # layout.addWidget(self.lbl_status)
 
     def _setup_audio_system(self):
         """Thiết lập hệ thống audio"""
@@ -217,8 +217,8 @@ class AudioPlayer(QWidget):
         self.total_known_ms = sum(d or 0 for d in self.segment_durations)
         self.slider.setRange(0, max(0, self.total_known_ms))
         self.update_time_label(0, self.total_known_ms)
-        self.lbl_status.setText(f"Đã tải {len(paths)} segments")
-
+        # self.lbl_status.setText(f"Đã tải {len(paths)} segments")
+        self.status_signal.emit(f"Đã tải lên {len(paths)} segments")
     def clear_segments(self):
         """Xóa tất cả segments"""
         self.stop()
@@ -228,7 +228,8 @@ class AudioPlayer(QWidget):
         self.current_index = -1
         self.slider.setRange(0, 0)
         self.update_time_label(0, 0)
-        self.lbl_status.setText("Sẵn sàng")
+        # self.lbl_status.setText("Sẵn sàng")
+        self.status_signal.emit("Đã xóa tất cả segments")
 
     def play(self):
         """Bắt đầu phát"""
@@ -721,6 +722,7 @@ class AudioPlayer(QWidget):
     def on_media_error(self, err):
         """Callback khi có lỗi media"""
         self.lbl_status.setText(f"⚠️ Lỗi phát: {self.player.errorString() or str(err)}")
+        
         self.play_next()
 
     def on_player_position_changed(self, pos_ms: int):
