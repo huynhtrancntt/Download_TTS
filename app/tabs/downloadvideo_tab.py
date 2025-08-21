@@ -41,6 +41,102 @@ class DownloadVideoTab(UIToolbarTab):
         self.max_workers = 4
         self.running = 0
         self.stopped = False
+        
+        # Add cleanup timer
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self._cleanup_finished_threads)
+        self.cleanup_timer.start(1000)  # Check every second
+
+    def _cleanup_finished_threads(self):
+        """Periodically cleanup finished threads without blocking"""
+        try:
+            if not self.stopped:
+                # Use slice copy to avoid modification during iteration
+                finished_threads = [t for t in self.active_threads[:] if not t.isRunning()]
+                for thread in finished_threads:
+                    if thread in self.active_threads:
+                        try:
+                            self.active_threads.remove(thread)
+                            # Use non-blocking cleanup
+                            thread.quit()
+                            # Schedule deletion after a short delay
+                            QTimer.singleShot(50, lambda t=thread: self._delete_thread_later(t))
+                        except Exception as e:
+                            print(f"Error cleaning up thread: {e}")
+                            # Force remove if normal cleanup fails
+                            try:
+                                if thread in self.active_threads:
+                                    self.active_threads.remove(thread)
+                                thread.deleteLater()
+                            except:
+                                pass
+        except Exception as e:
+            print(f"Error in cleanup timer: {e}")
+            # Restart timer if it fails
+            if hasattr(self, 'cleanup_timer'):
+                self.cleanup_timer.start(1000)
+
+    def _delete_thread_later(self, thread):
+        """Delete thread object after delay to prevent blocking"""
+        try:
+            if thread and hasattr(thread, 'deleteLater'):
+                thread.deleteLater()
+        except Exception as e:
+            print(f"Error deleting thread: {e}")
+
+    def _check_thread_status(self):
+        """Check if any threads are still running and update UI accordingly"""
+        if self.running == 0 and not self.stopped:
+            # All threads finished normally
+            self.download_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self._reset_progress()
+        elif self.running == 0 and self.stopped:
+            # All threads stopped by user
+            self.download_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self._reset_progress()
+
+    def _force_stop_all_threads(self):
+        """Force stop all threads when normal stop fails"""
+        for thread in self.active_threads[:]:
+            try:
+                if hasattr(thread, 'stop_flag'):
+                    thread.stop_flag = True
+                if hasattr(thread, 'process') and thread.process:
+                    thread.process.kill()
+                    thread.process.terminate()
+                thread.quit()
+                thread.wait(500)  # Wait up to 500ms
+                thread.deleteLater()
+            except Exception as e:
+                print(f"Force stop thread error: {e}")
+                try:
+                    thread.deleteLater()
+                except:
+                    pass
+        
+        self.active_threads.clear()
+        self.running = 0
+
+    def _reset_download_state(self):
+        """Reset download state to initial values"""
+        self.stopped = False
+        self.index = 1
+        self.running = 0
+        self.active_threads.clear()
+        self.download_button.setEnabled(True)
+        self.stop_button.setEnabled(False)
+        self._reset_progress()
+
+    def _safe_start_download(self):
+        """Safe wrapper for start_download with error handling"""
+        try:
+            self.start_download()
+        except Exception as e:
+            print(f"Error starting download: {e}")
+            self._add_log_item(f"❌ Lỗi khi bắt đầu tải: {e}", "error")
+            self._reset_download_state()
 
     def _setup_history(self) -> None:
         """Enable per-tab history with its own panel and button"""
@@ -205,7 +301,7 @@ class DownloadVideoTab(UIToolbarTab):
 
         self.download_button = QPushButton(
             "🚀 Bắt đầu tải",
-            clicked=self.start_download
+            clicked=self._safe_start_download
         )
         self.download_button.setObjectName("btn_style_1")
         self.stop_button = QPushButton(
@@ -222,85 +318,228 @@ class DownloadVideoTab(UIToolbarTab):
             self.folder_name_input.setText(folder_path)
 
     def start_download(self):
+        """Start download with proper error handling"""
+        try:
+            # Stop any existing downloads first
+            if self.active_threads or self.running > 0:
+                self.stop_download()
+                # Use non-blocking approach to wait for threads to stop
+                QTimer.singleShot(100, self._start_download_after_stop)
+                return
+            
+            # If no threads running, start immediately
+            self._start_download_immediate()
+            
+        except Exception as e:
+            print(f"Error in start_download: {e}")
+            self._add_log_item(f"❌ Lỗi khi bắt đầu tải: {e}", "error")
+            self._force_reset_state()
 
-        # if self.worker and self.worker.isRunning():
-        #     self.worker.stop()
-        self.stopped = False
+    def _start_download_after_stop(self):
+        """Start download after stopping existing threads"""
+        try:
+            # Check if threads are really stopped
+            if self.active_threads or self.running > 0:
+                # Schedule another check
+                QTimer.singleShot(100, self._start_download_after_stop)
+                return
+            
+            # All threads stopped, start download
+            self._start_download_immediate()
+            
+        except Exception as e:
+            print(f"Error in _start_download_after_stop: {e}")
+            self._force_reset_state()
 
-        urls = [u.strip()
-                for u in self.url_inputdownloadvideo.toPlainText().splitlines() if u.strip()]
-        if not urls:
-            QMessageBox.warning(self, "Cảnh báo", "Bạn chưa nhập URL nào.")
-            return
+    def _start_download_immediate(self):
+        """Start download immediately"""
+        try:
+            # Reset state
+            self.stopped = False
+            self.index = 1
+            self.running = 0
+            self.active_threads.clear()
 
-        urls = self.url_inputdownloadvideo.toPlainText().splitlines()
-        urls = [u.strip() for u in urls if u.strip()]
+            # Validate input
+            urls = [u.strip() for u in self.url_inputdownloadvideo.toPlainText().splitlines() if u.strip()]
+            if not urls:
+                QMessageBox.warning(self, "Cảnh báo", "Bạn chưa nhập URL nào.")
+                return
 
-        self.urls = urls
+            self.urls = urls
+            selected_code = self.language_box.currentData()
 
-        selected_code = self.language_box.currentData()
+            # Hiển thị các tùy chọn khác
+            options = []
+            if self.audio_only.isChecked():
+                options.append("🎵 Audio MP3")
+            if self.include_thumb.isChecked():
+                options.append("🖼️ Thumbnail")
+            if self.subtitle_only.isChecked():
+                options.append("📝 Chỉ phụ đề")
 
-        # Hiển thị các tùy chọn khác
-        options = []
-        if self.audio_only.isChecked():
-            options.append("🎵 Audio MP3")
-        if self.include_thumb.isChecked():
-            options.append("🖼️ Thumbnail")
-        if self.subtitle_only.isChecked():
-            options.append("📝 Chỉ phụ đề")
+            if options:
+                self._add_log_item(f"⚙️ Tùy chọn: {', '.join(options)}")
 
-        if options:
-            self._add_log_item(f"⚙️ Tùy chọn: {', '.join(options)}")
+            # Folder name
+            custom_folder = self.folder_name_input.text()
+            if custom_folder:
+                self._add_log_item(f"📁 Thư mục: {custom_folder}")
 
-        # Folder name
-        custom_folder = self.folder_name_input.text()
-        if custom_folder:
-            self._add_log_item(f"📁 Thư mục: {custom_folder}")
+            selected_sub_mode = self.sub_mode.currentData()
+            sub_mode_name = next(
+                (name for name, code in self.sub_mode_list if code == selected_sub_mode), None)
+            if selected_sub_mode:
+                self._add_log_item(f"📜 Chế độ {sub_mode_name}")
 
-        selected_sub_mode = self.sub_mode.currentData()
-        sub_mode_name = next(
-            (name for name, code in self.sub_mode_list if code == selected_sub_mode), None)
-        if selected_sub_mode:
-            self._add_log_item(f"📜 Chế độ {sub_mode_name}")
+            self.max_workers = int(self.theard_video.value())
+            self._add_log_item(f"Đang chạy với {self.max_workers} thread")
 
-        self.max_workers = int(self.theard_video.value())
-        self._add_log_item(f"Đang chạy với {self.max_workers} thread")
+            # Update UI
+            self.download_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
 
-        self.download_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
-
-        self.custom_folder_name = custom_folder
-        self.video_mode = self.type_video.currentText()
-        self._add_log_item("🚀 Bắt đầu tải video...")
-        self.index = 1
-        self.active_threads.clear()
-        self.running = 0
-        self.audio_only_flag = self.audio_only.isChecked()
-        self.sub_mode_flag = selected_sub_mode
-        self.sub_lang_code_flag = selected_code
-        self.sub_lang_name_flag = self.language_box.currentText()
-        self.include_thumb_flag = self.include_thumb.isChecked()
-        self.subtitle_only_flag = self.subtitle_only.isChecked()
-        self.download_folder = self._create_download_folder()
-        self._reset_progress()
-        self._update_progress_title("Tiến trình xử lý")
-        self.download_next_batch()
+            # Set flags
+            self.custom_folder_name = custom_folder
+            self.video_mode = self.type_video.currentText()
+            self.audio_only_flag = self.audio_only.isChecked()
+            self.sub_mode_flag = selected_sub_mode
+            self.sub_lang_code_flag = selected_code
+            self.sub_lang_name_flag = self.language_box.currentText()
+            self.include_thumb_flag = self.include_thumb.isChecked()
+            self.subtitle_only_flag = self.subtitle_only.isChecked()
+            self.download_folder = self._create_download_folder()
+            
+            # Reset progress and start
+            self._reset_progress()
+            self._update_progress_title("Tiến trình xử lý")
+            self._add_log_item("🚀 Bắt đầu tải video...")
+            self.download_next_batch()
+            
+        except Exception as e:
+            print(f"Error in _start_download_immediate: {e}")
+            self._add_log_item(f"❌ Lỗi khi bắt đầu tải: {e}", "error")
+            self._force_reset_state()
 
     def stop_download(self):
-        self.stopped = True
+        """Stop all downloads safely without blocking UI"""
+        try:
+            self.stopped = True
+            
+            # Stop cleanup timer temporarily
+            if hasattr(self, 'cleanup_timer'):
+                self.cleanup_timer.stop()
+            
+            # Update UI immediately
+            self._add_log_item("⏹ Đang dừng các tiến trình tải...")
+            self.stop_button.setEnabled(False)
+            self.download_button.setEnabled(True)
+            
+            # Use non-blocking approach to stop threads
+            self._stop_threads_async()
+            
+        except Exception as e:
+            print(f"Error in stop_download: {e}")
+            # Force reset state if something goes wrong
+            self._force_reset_state()
 
-        for thread in self.active_threads:
-            thread.stop_flag = True
+    def _stop_threads_async(self):
+        """Stop threads asynchronously to prevent UI freezing"""
+        try:
+            # Set stop flags for all threads
+            for thread in self.active_threads[:]:
+                if hasattr(thread, 'stop_flag'):
+                    thread.stop_flag = True
+                if hasattr(thread, 'process') and thread.process:
+                    try:
+                        thread.process.kill()
+                        thread.process.terminate()
+                    except Exception as e:
+                        print(f"Error killing process: {e}")
+            
+            # Schedule thread cleanup after a short delay
+            QTimer.singleShot(100, self._cleanup_stopped_threads)
+            
+        except Exception as e:
+            print(f"Error in _stop_threads_async: {e}")
 
-        self._add_log_item("⏹ Đang dừng các tiến trình tải...")
-        self.stop_button.setEnabled(False)
-        self.download_button.setEnabled(True)
-        self._reset_progress()
+    def _cleanup_stopped_threads(self):
+        """Clean up stopped threads after delay"""
+        try:
+            # Check which threads have stopped
+            stopped_threads = []
+            for thread in self.active_threads[:]:
+                if not thread.isRunning():
+                    stopped_threads.append(thread)
+                else:
+                    # Force quit if still running
+                    try:
+                        thread.quit()
+                    except:
+                        pass
+            
+            # Remove stopped threads
+            for thread in stopped_threads:
+                if thread in self.active_threads:
+                    self.active_threads.remove(thread)
+                    try:
+                        thread.deleteLater()
+                    except:
+                        pass
+            
+            # Update running count
+            self.running = len([t for t in self.active_threads if t.isRunning()])
+            
+            # If all threads stopped, complete the stop process
+            if self.running == 0:
+                self._complete_stop_process()
+            else:
+                # Schedule another cleanup check
+                QTimer.singleShot(200, self._cleanup_stopped_threads)
+                
+        except Exception as e:
+            print(f"Error in _cleanup_stopped_threads: {e}")
+            self._complete_stop_process()
+
+    def _complete_stop_process(self):
+        """Complete the stop process after all threads are stopped"""
+        try:
+            # Clear any remaining threads
+            self.active_threads.clear()
+            self.running = 0
+            
+            # Update UI
+            self._add_log_item("⏹ Đã dừng toàn bộ tiến trình.")
+            self._reset_progress()
+            
+            # Restart cleanup timer
+            if hasattr(self, 'cleanup_timer'):
+                self.cleanup_timer.start(1000)
+                
+        except Exception as e:
+            print(f"Error in _complete_stop_process: {e}")
+
+    def _force_reset_state(self):
+        """Force reset state when normal reset fails"""
+        try:
+            self.stopped = True
+            self.running = 0
+            self.active_threads.clear()
+            self.download_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+            self._reset_progress()
+            
+            # Restart cleanup timer
+            if hasattr(self, 'cleanup_timer'):
+                self.cleanup_timer.start(1000)
+        except Exception as e:
+            print(f"Error in force reset: {e}")
 
     def download_next_batch(self):
         while self.running < self.max_workers and self.index <= len(self.urls) and not self.stopped:
             url = self.urls[self.index - 1]
             worker_id = self.running + 1
+            
             thread = DownloadVideo(
                 url=url,
                 video_index=self.index,
@@ -315,24 +554,37 @@ class DownloadVideoTab(UIToolbarTab):
                 subtitle_only=self.subtitle_only_flag,
                 custom_folder_name=self.download_folder
             )
+            
+            # Connect signals properly - use message_signal not message
             thread.message_signal.connect(self._add_log_item)
             thread.finished_signal.connect(self.handle_thread_done)
             thread.progress_signal.connect(self.update_progress)
             thread.error_signal.connect(self.error_thread)
+            
             self.active_threads.append(thread)
             thread.start()
             self.running += 1
             self.index += 1
 
     def handle_thread_done(self):
+        """Handle when a thread finishes - no parameters needed"""
         self.running -= 1
+        
+        # Clean up finished threads
+        finished_threads = [t for t in self.active_threads if not t.isRunning()]
+        for thread in finished_threads:
+            if thread in self.active_threads:
+                self.active_threads.remove(thread)
+                thread.quit()
+                thread.wait()
+                thread.deleteLater()
+        
         if not self.stopped and self.index <= len(self.urls):
             self.download_next_batch()
         elif self.running == 0:
             if self.stopped:
                 self._add_log_item("⏹ Đã dừng toàn bộ tiến trình.")
             else:
-                # self.progress.setValue(100)
                 self._add_log_item("✅ Tải xong tất cả video.")
                 self._add_log_item(
                     f"📂 Video được lưu tại: {self.download_folder}")
@@ -436,3 +688,65 @@ class DownloadVideoTab(UIToolbarTab):
         except Exception as e:
             # Fallback to print if logging fails
             print(f"[DOWNLOAD LOG ERROR] {e}")
+
+    def cleanup_threads(self):
+        """Clean up all threads when tab is closed"""
+        try:
+            self.stopped = True
+            
+            # Stop cleanup timer
+            if hasattr(self, 'cleanup_timer'):
+                self.cleanup_timer.stop()
+            
+            # Stop all active threads safely
+            threads_to_cleanup = self.active_threads[:]
+            for thread in threads_to_cleanup:
+                try:
+                    # Set stop flag
+                    if hasattr(thread, 'stop_flag'):
+                        thread.stop_flag = True
+                    
+                    # Kill subprocess if exists
+                    if hasattr(thread, 'process') and thread.process:
+                        try:
+                            thread.process.kill()
+                            thread.process.terminate()
+                        except Exception as e:
+                            print(f"Error killing process during cleanup: {e}")
+                    
+                    # Stop thread
+                    if thread.isRunning():
+                        thread.quit()
+                        if not thread.wait(3000):  # Wait up to 3 seconds
+                            thread.terminate()
+                            thread.wait(1000)
+                    
+                    # Delete thread object
+                    thread.deleteLater()
+                    
+                except Exception as e:
+                    print(f"Error cleaning up thread during tab close: {e}")
+                    try:
+                        thread.deleteLater()
+                    except:
+                        pass
+            
+            # Clear state
+            self.active_threads.clear()
+            self.running = 0
+            
+        except Exception as e:
+            print(f"Error in cleanup_threads: {e}")
+            # Force clear everything
+            try:
+                self.active_threads.clear()
+                self.running = 0
+                if hasattr(self, 'cleanup_timer'):
+                    self.cleanup_timer.stop()
+            except:
+                pass
+
+    def closeEvent(self, event):
+        """Handle tab close event"""
+        self.cleanup_threads()
+        super().closeEvent(event)

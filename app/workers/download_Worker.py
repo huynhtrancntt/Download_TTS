@@ -1,9 +1,10 @@
 from PySide6.QtCore import QThread, Signal, QTime
-
 import sys
 import os
 import re
 import subprocess
+import shutil
+import tempfile
 from app.ui_setting import resource_path
 
 
@@ -35,6 +36,11 @@ class DownloadVideo(QThread):
         self.ffmpeg_path = resource_path(os.path.join("data", "ffmpeg.exe"))
         self.ytdlp_path = resource_path(os.path.join("data", "yt-dlp.exe"))
         self.stop_flag = False
+
+        # Tạo thư mục tạm cho download
+        self.temp_dir = tempfile.mkdtemp(prefix="yt_download_")
+        self.final_dir = custom_folder_name
+
         # print(self.url)
         # print(f" video_mode {self.video_mode}")
         # print(f" audio_only {self.audio_only}")
@@ -43,6 +49,7 @@ class DownloadVideo(QThread):
         # print(f" sub_lang_name {self.sub_lang_name}")
         # print(f" subtitle_only {self.subtitle_only}")
         # print(f" custom_folder_name {self.custom_folder_name}")
+        # print(f" temp_dir {self.temp_dir}")
 
     def run(self):
 
@@ -50,6 +57,7 @@ class DownloadVideo(QThread):
         if self.stop_flag:
             self.message_signal.emit(
                 f"{message_thread} ⏹ Đã dừng trước khi bắt đầu.", "")
+            self._cleanup_temp()
             self.finished_signal.emit()
             return
 
@@ -70,37 +78,32 @@ class DownloadVideo(QThread):
         get_title_cmd = [ytdlp_path, "--encoding",
                          "utf-8", "--get-title", self.url]
         result = subprocess.run(get_title_cmd, capture_output=True,
-
                                 text=True, encoding="utf-8", creationflags=creation_flags)
 
         title = result.stdout.strip().replace("/", "-").replace("\\", "-")
         if not title:
             self.error_signal.emit(
                 f"{message_thread} Internet của bạn có vấn đề. vui lòng check lại!",)
+            self._cleanup_temp()
             return
         self.message_signal.emit(
             f"{message_thread} 🎯 Tiêu đề: {title}", "")
 
+        # Download vào thư mục tạm
         output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
         if self.video_mode == "Video":
             output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
         else:
             output_filename = f"playlist.{self.video_index:02d}.{title}.%(ext)s"
 
-        output_filename = os.path.join(
-            self.custom_folder_name, output_filename)
+        # Đường dẫn tạm
+        temp_output = os.path.join(self.temp_dir, output_filename)
 
-        # download_cmd = [
-        #     ytdlp_path, "--encoding", "utf-8", self.url,
-        #     "--newline",
-        #     "--progress", "--write-auto-sub", "--sub-langs", "vi",
-        #     "--sub-format", "srt/best", "--convert-subs", "srt",
-        #     "-f", "bv*+ba/b", "--merge-output-format", "mp4",
-        #     "--output", output_filename, "--extract-audio",
-        #     "--audio-format", "mp3", "--write-thumbnail",
-        #     "--ignore-errors", "--no-warnings"
-        # ]
-        download_cmd = self._build_command(ytdlp_path, output_filename)
+        # Đường dẫn cuối cùng
+        final_output = os.path.join(self.final_dir, output_filename)
+
+        download_cmd = self._build_command(ytdlp_path, temp_output)
+
         self.process = subprocess.Popen(
             download_cmd,
             stdout=subprocess.PIPE,
@@ -117,11 +120,11 @@ class DownloadVideo(QThread):
                 self.process.terminate()
                 self.message_signal.emit(
                     f"{message_thread} ⏹ Đã dừng tải video.", "")
+                self._cleanup_temp()
                 self.finished_signal.emit()
                 return
 
             if line.strip():
-
                 self.message_signal.emit(
                     f"{message_thread} {line.strip()}", "")
                 match = re.search(r"\[download\]\s+(\d{1,3}\.\d{1,2})%", line)
@@ -131,11 +134,264 @@ class DownloadVideo(QThread):
 
         self.process.wait()
 
+        # Kiểm tra xem download có thành công không
+        if self.process.returncode != 0:
+            self.error_signal.emit(
+                f"{message_thread} ❌ Lỗi khi tải video!")
+            self._cleanup_temp()
+            return
+
         self.progress_signal.emit(95)
-        video_filename = f"{self.video_index:02d}_{title}.mp4"
+
+        # Tìm file đã download trong thư mục tạm
+        downloaded_files = self._find_downloaded_files()
+        if not downloaded_files:
+            self.error_signal.emit(
+                f"{message_thread} ❌ Không tìm thấy file đã download!"),
+            self._cleanup_temp()
+            return
+
+            # Copy file từ thư mục tạm ra thư mục cuối cùng
         self.message_signal.emit(
-            f"{message_thread} ✅ Xong: {video_filename}", "")
-        self.finished_signal.emit()
+            f"{message_thread} 📁 Đang copy file ra thư mục cuối cùng...", "")
+
+        success = self._copy_files_to_final(downloaded_files, title)
+        if success:
+            # Tìm tên file chính để hiển thị
+            main_file = self._find_main_file(downloaded_files)
+            if main_file:
+                self.message_signal.emit(
+                    f"{message_thread} ✅ Hoàn thành download và copy!", "")
+            else:
+                self.message_signal.emit(
+                    f"{message_thread} ✅ Hoàn thành download!", "")
+
+            # Dọn dẹp thư mục tạm
+            self._cleanup_temp()
+            self.finished_signal.emit()
+        else:
+            self.error_signal.emit(
+                f"{message_thread} ❌ Lỗi khi copy file!")
+            self._cleanup_temp()
+            self.finished_signal.emit()
+
+    def _find_downloaded_files(self):
+        """Tìm các file đã download trong thư mục tạm"""
+        files = []
+        try:
+            for item in os.listdir(self.temp_dir):
+                item_path = os.path.join(self.temp_dir, item)
+                if os.path.isfile(item_path):
+                    files.append(item_path)
+        except Exception as e:
+            print(f"Error finding downloaded files: {e}")
+        return files
+
+    def _copy_files_to_final(self, temp_files, title):
+        """Copy file từ thư mục tạm ra thư mục cuối cùng"""
+        try:
+            # Đảm bảo thư mục đích tồn tại
+            os.makedirs(self.final_dir, exist_ok=True)
+
+            copied_files = []
+            for temp_file in temp_files:
+                filename = os.path.basename(temp_file)
+                final_file = os.path.join(self.final_dir, filename)
+                print(f"filename: {filename}")
+                # Kiểm tra xem có nên copy file này hay không dựa trên chế độ download
+                # if not self._should_copy_file(filename):
+                #     continue
+
+                # Xử lý từng loại file cụ thể
+                if self._is_video_file(filename):
+                    # File video - dùng ffmpeg để copy với metadata
+                    success = self._copy_video_file(temp_file, final_file)
+                    if success:
+                        copied_files.append(f"🎬 Video: {filename}")
+                elif self._is_audio_file(filename):
+                    # File audio (mp3, wav, etc.) - dùng ffmpeg để copy
+                    success = self._copy_audio_file(temp_file, final_file)
+                    if success:
+                        copied_files.append(f"🎵 Audio: {filename}")
+                elif self._is_subtitle_file(filename):
+                    # File phụ đề - copy trực tiếp
+                    success = self._copy_subtitle_file(temp_file, final_file)
+                    if success:
+                        copied_files.append(f"📝 Phụ đề: {filename}")
+                elif self._is_thumbnail_file(filename):
+                    # File thumbnail - copy trực tiếp
+                    success = self._copy_thumbnail_file(temp_file, final_file)
+                    if success:
+                        copied_files.append(f"🖼️ Thumbnail: {filename}")
+                else:
+                    # File khác - copy trực tiếp
+                    success = self._copy_other_file(temp_file, final_file)
+                    if success:
+                        copied_files.append(f"📄 File: {filename}")
+
+            # Thông báo các file đã copy thành công
+            if copied_files:
+                self.message_signal.emit(
+                    f"[Thread {self.worker_id}] ✅ Đã copy thành công:\n" + "\n".join(copied_files), "")
+
+            return True
+
+        except Exception as e:
+            print(f"Error copying files: {e}")
+            return False
+
+    def _should_copy_file(self, filename):
+        """Kiểm tra xem có nên copy file này hay không dựa trên chế độ download"""
+        # Nếu chỉ tải phụ đề, chỉ copy file phụ đề
+        if self.subtitle_only:
+            return self._is_subtitle_file(filename)
+
+        # Nếu check "Tải MP3": copy video + audio + thumbnail
+        if self.audio_only:
+            return (self._is_video_file(filename) or
+                    self._is_audio_file(filename) or
+                    self._is_thumbnail_file(filename))
+
+        # Nếu chỉ check "Bao gồm ảnh": copy video + thumbnail
+        if self.include_thumb and not self.audio_only:
+            return self._is_video_file(filename) or self._is_thumbnail_file(filename)
+
+        # Mặc định: chỉ copy video MP4
+        return self._is_video_file(filename)
+
+    def _copy_video_file(self, temp_file, final_file):
+        """Copy file video với ffmpeg"""
+        try:
+            if os.path.exists(self.ffmpeg_path):
+                # Dùng ffmpeg để copy với metadata
+                ffmpeg_cmd = [
+                    self.ffmpeg_path,
+                    "-i", temp_file,
+                    "-c", "copy",  # Copy không re-encode
+                    "-y",  # Ghi đè file nếu có
+                    final_file
+                ]
+
+                creation_flags = 0
+                if sys.platform == "win32":
+                    creation_flags = subprocess.CREATE_NO_WINDOW
+
+                result = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    creationflags=creation_flags
+                )
+
+                if result.returncode == 0:
+                    return True
+
+            # Fallback: copy thường nếu ffmpeg thất bại hoặc không có
+            shutil.copy2(temp_file, final_file)
+            return True
+
+        except Exception as e:
+            print(f"Error copying video file: {e}")
+            return False
+
+    def _copy_audio_file(self, temp_file, final_file):
+        """Copy file audio với ffmpeg"""
+        try:
+            if os.path.exists(self.ffmpeg_path):
+                # Dùng ffmpeg để copy với metadata
+                ffmpeg_cmd = [
+                    self.ffmpeg_path,
+                    "-i", temp_file,
+                    "-c", "copy",  # Copy không re-encode
+                    "-y",  # Ghi đè file nếu có
+                    final_file
+                ]
+
+                creation_flags = 0
+                if sys.platform == "win32":
+                    creation_flags = subprocess.CREATE_NO_WINDOW
+
+                result = subprocess.run(
+                    ffmpeg_cmd,
+                    capture_output=True,
+                    creationflags=creation_flags
+                )
+
+                if result.returncode == 0:
+                    return True
+
+            # Fallback: copy thường nếu ffmpeg thất bại hoặc không có
+            shutil.copy2(temp_file, final_file)
+            return True
+
+        except Exception as e:
+            print(f"Error copying audio file: {e}")
+            return False
+
+    def _copy_subtitle_file(self, temp_file, final_file):
+        """Copy file phụ đề"""
+        try:
+            shutil.copy2(temp_file, final_file)
+            return True
+        except Exception as e:
+            print(f"Error copying subtitle file: {e}")
+            return False
+
+    def _copy_thumbnail_file(self, temp_file, final_file):
+        """Copy file thumbnail"""
+        try:
+            shutil.copy2(temp_file, final_file)
+            return True
+        except Exception as e:
+            print(f"Error copying thumbnail file: {e}")
+            return False
+
+    def _copy_other_file(self, temp_file, final_file):
+        """Copy file khác"""
+        try:
+            shutil.copy2(temp_file, final_file)
+            return True
+        except Exception as e:
+            print(f"Error copying other file: {e}")
+            return False
+
+    def _find_main_file(self, temp_files):
+        """Tìm file chính (video hoặc audio) trong danh sách file tạm"""
+        for temp_file in temp_files:
+            filename = os.path.basename(temp_file)
+            if self._is_video_file(filename) or self._is_audio_file(filename):
+                return filename
+        return None
+
+    def _is_video_file(self, filename):
+        """Kiểm tra xem file có phải là video file không"""
+        video_extensions = ['.mp4', '.mkv', '.avi',
+                            '.mov', '.wmv', '.flv', '.webm', '.m4v']
+        return any(filename.lower().endswith(ext) for ext in video_extensions)
+
+    def _is_audio_file(self, filename):
+        """Kiểm tra xem file có phải là audio file không"""
+        audio_extensions = ['.mp3', '.wav', '.aac',
+                            '.ogg', '.m4a', '.flac', '.wma']
+        return any(filename.lower().endswith(ext) for ext in audio_extensions)
+
+    def _is_subtitle_file(self, filename):
+        """Kiểm tra xem file có phải là subtitle file không"""
+        subtitle_extensions = ['.srt', '.vtt', '.ass', '.ssa', '.sub', '.idx']
+        return any(filename.lower().endswith(ext) for ext in subtitle_extensions)
+
+    def _is_thumbnail_file(self, filename):
+        """Kiểm tra xem file có phải là thumbnail file không"""
+        image_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif']
+        return any(filename.lower().endswith(ext) for ext in image_extensions)
+
+    def _cleanup_temp(self):
+        """Dọn dẹp thư mục tạm"""
+        try:
+            if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
+                # shutil.rmtree(self.temp_dir)
+                pass
+        except Exception as e:
+            print(f"Error cleaning up temp directory: {e}")
 
     def _build_command(self, ytdlp_path, output):
         """Xây dựng lệnh yt-dlp"""
@@ -146,18 +402,22 @@ class DownloadVideo(QThread):
         if os.path.exists(self.ffmpeg_path):
             cmd += ["--ffmpeg-location", self.ffmpeg_path]
 
+        # Xử lý từng chế độ download cụ thể
         if self.subtitle_only:
+            # Chỉ tải phụ đề
             cmd.append("--skip-download")
-            self.message.emit("📝 Chế độ: Chỉ tải phụ đề")
+            self.message_signal.emit("📝 Chế độ: Chỉ tải phụ đề", "")
         else:
+            # Tải cả video MP4 và audio MP3
             cmd += ["-f", "bv*+ba/b", "--merge-output-format", "mp4"]
+
+        if self.audio_only:
+            cmd += ["--extract-audio", "--audio-format", "mp3", "--keep-video"]
+            self.message_signal.emit("🎬 Chế độ: Tải MP3", "")
 
         cmd += ["-o", output]
 
-        if self.audio_only and not self.subtitle_only:
-            cmd += ["--extract-audio", "--audio-format", "mp3"]
-
-        # Xử lý phụ đề
+        # Xử lý phụ đề (chỉ khi check "Tải MP3" hoặc có yêu cầu cụ thể)
         if self.sub_mode != "":
             if self.sub_mode == "1":
                 cmd += ["--write-subs", "--sub-langs", self.sub_lang]
@@ -172,11 +432,12 @@ class DownloadVideo(QThread):
             cmd += [
                 "--ignore-errors",           # Bỏ qua lỗi nếu một ngôn ngữ không có
                 "--no-warnings",            # Không hiển thị cảnh báo
-                "--sub-format", "srt/best"  # Ưu tiên định dạng SRT
+                "--sub-format", "srt/best",  # Ưu tiên định dạng SRT
             ]
 
         cmd += ["--convert-subs", "srt"]
 
+        # Tải thumbnail nếu được yêu cầu
         if self.include_thumb:
             cmd.append("--write-thumbnail")
 
