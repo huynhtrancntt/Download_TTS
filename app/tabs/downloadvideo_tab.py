@@ -1,14 +1,10 @@
-from decimal import setcontext
-from turtle import onclick
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QTextEdit, QComboBox, QSlider, QSpinBox,
-    QListWidget, QMessageBox,
-    QFileDialog, QListWidgetItem, QCheckBox, QGroupBox, QLineEdit
+    QLabel, QTextEdit, QComboBox, QSpinBox,
+    QMessageBox, QFileDialog, QCheckBox, QGroupBox, QLineEdit
 )
 from PySide6.QtCore import Qt, QTimer
-from typing import Optional, Callable, Type
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QThreadPool
 
 from app.uiToolbarTab import UIToolbarTab
 
@@ -16,10 +12,11 @@ from app.core.config import AppConfig
 
 from pathlib import Path
 
-from app.workers.download_Worker import DownloadVideo
+from app.workers.download_Worker import DownloadRunnable
 import os
 from datetime import datetime
 
+import subprocess
 
 class DownloadVideoTab(UIToolbarTab):
     """
@@ -34,88 +31,40 @@ class DownloadVideoTab(UIToolbarTab):
 
     def _initialize_state_variables(self) -> None:
 
-        self.worker = None
-        # Thread
+        # Concurrency state
         self.index = 1
         self.active_threads = []
         self.max_workers = 4
         self.running = 0
         self.stopped = False
-        
-        # Add cleanup timer
-        self.cleanup_timer = QTimer()
-        self.cleanup_timer.timeout.connect(self._cleanup_finished_threads)
-        self.cleanup_timer.start(1000)  # Check every second
 
-    def _cleanup_finished_threads(self):
-        """Periodically cleanup finished threads without blocking"""
+        # Thread pool for QRunnable-based downloads
+        self.thread_pool = QThreadPool.globalInstance()
+        # Upper bound; actual concurrency is controlled by self.max_workers and self.running
         try:
-            if not self.stopped:
-                # Use slice copy to avoid modification during iteration
-                finished_threads = [t for t in self.active_threads[:] if not t.isRunning()]
-                for thread in finished_threads:
-                    if thread in self.active_threads:
-                        try:
-                            self.active_threads.remove(thread)
-                            # Use non-blocking cleanup
-                            thread.quit()
-                            # Schedule deletion after a short delay
-                            QTimer.singleShot(50, lambda t=thread: self._delete_thread_later(t))
-                        except Exception as e:
-                            print(f"Error cleaning up thread: {e}")
-                            # Force remove if normal cleanup fails
-                            try:
-                                if thread in self.active_threads:
-                                    self.active_threads.remove(thread)
-                                thread.deleteLater()
-                            except:
-                                pass
-        except Exception as e:
-            print(f"Error in cleanup timer: {e}")
-            # Restart timer if it fails
-            if hasattr(self, 'cleanup_timer'):
-                self.cleanup_timer.start(1000)
+            self.thread_pool.setMaxThreadCount(8)
+        except Exception:
+            pass
 
-    def _delete_thread_later(self, thread):
-        """Delete thread object after delay to prevent blocking"""
-        try:
-            if thread and hasattr(thread, 'deleteLater'):
-                thread.deleteLater()
-        except Exception as e:
-            print(f"Error deleting thread: {e}")
 
-    def _check_thread_status(self):
-        """Check if any threads are still running and update UI accordingly"""
-        if self.running == 0 and not self.stopped:
-            # All threads finished normally
-            self.download_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
-            self._reset_progress()
-        elif self.running == 0 and self.stopped:
-            # All threads stopped by user
-            self.download_button.setEnabled(True)
-            self.stop_button.setEnabled(False)
-            self._reset_progress()
+
+
+
 
     def _force_stop_all_threads(self):
-        """Force stop all threads when normal stop fails"""
-        for thread in self.active_threads[:]:
+        """Force stop all tasks (QRunnable) by killing their subprocess if any"""
+        for task in self.active_threads[:]:
             try:
-                if hasattr(thread, 'stop_flag'):
-                    thread.stop_flag = True
-                if hasattr(thread, 'process') and thread.process:
-                    thread.process.kill()
-                    thread.process.terminate()
-                thread.quit()
-                thread.wait(500)  # Wait up to 500ms
-                thread.deleteLater()
-            except Exception as e:
-                print(f"Force stop thread error: {e}")
-                try:
-                    thread.deleteLater()
-                except:
-                    pass
-        
+                if hasattr(task, 'stop_flag'):
+                    task.stop_flag = True
+                if hasattr(task, 'process') and task.process:
+                    try:
+                        task.process.kill()
+                        task.process.terminate()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
         self.active_threads.clear()
         self.running = 0
 
@@ -392,7 +341,8 @@ class DownloadVideoTab(UIToolbarTab):
             if selected_sub_mode:
                 self._add_log_item(f"📜 Chế độ {sub_mode_name}")
 
-            self.max_workers = int(self.theard_video.value())
+            # Cap workers to number of URLs to avoid spawning unnecessary threads
+            self.max_workers = min(int(self.theard_video.value()), len(self.urls))
             self._add_log_item(f"Đang chạy với {self.max_workers} thread")
 
             # Update UI
@@ -413,6 +363,7 @@ class DownloadVideoTab(UIToolbarTab):
             # Reset progress and start
             self._reset_progress()
             self._update_progress_title("Tiến trình xử lý")
+            self._update_progress(15)
             self._add_log_item("🚀 Bắt đầu tải video...")
             self.download_next_batch()
             
@@ -426,14 +377,11 @@ class DownloadVideoTab(UIToolbarTab):
         try:
             self.stopped = True
             
-            # Stop cleanup timer temporarily
-            if hasattr(self, 'cleanup_timer'):
-                self.cleanup_timer.stop()
-            
             # Update UI immediately
             self._add_log_item("⏹ Đang dừng các tiến trình tải...")
+            # Tắt cả hai nút để tránh nhấp liên tục; sẽ bật lại khi dừng xong
             self.stop_button.setEnabled(False)
-            self.download_button.setEnabled(True)
+            self.download_button.setEnabled(False)
             
             # Use non-blocking approach to stop threads
             self._stop_threads_async()
@@ -458,48 +406,14 @@ class DownloadVideoTab(UIToolbarTab):
                         print(f"Error killing process: {e}")
             
             # Schedule thread cleanup after a short delay
-            QTimer.singleShot(100, self._cleanup_stopped_threads)
-            
+            QTimer.singleShot(500, self._cleanup_stopped_threads)
+            self.kill_with_taskkill()
         except Exception as e:
             print(f"Error in _stop_threads_async: {e}")
 
     def _cleanup_stopped_threads(self):
-        """Clean up stopped threads after delay"""
-        try:
-            # Check which threads have stopped
-            stopped_threads = []
-            for thread in self.active_threads[:]:
-                if not thread.isRunning():
-                    stopped_threads.append(thread)
-                else:
-                    # Force quit if still running
-                    try:
-                        thread.quit()
-                    except:
-                        pass
-            
-            # Remove stopped threads
-            for thread in stopped_threads:
-                if thread in self.active_threads:
-                    self.active_threads.remove(thread)
-                    try:
-                        thread.deleteLater()
-                    except:
-                        pass
-            
-            # Update running count
-            self.running = len([t for t in self.active_threads if t.isRunning()])
-            
-            # If all threads stopped, complete the stop process
-            if self.running == 0:
-                self._complete_stop_process()
-            else:
-                # Schedule another cleanup check
-                QTimer.singleShot(200, self._cleanup_stopped_threads)
-                
-        except Exception as e:
-            print(f"Error in _cleanup_stopped_threads: {e}")
-            self._complete_stop_process()
+        """With QRunnable, simply mark complete after clearing state."""
+        self._complete_stop_process()
 
     def _complete_stop_process(self):
         """Complete the stop process after all threads are stopped"""
@@ -511,10 +425,8 @@ class DownloadVideoTab(UIToolbarTab):
             # Update UI
             self._add_log_item("⏹ Đã dừng toàn bộ tiến trình.")
             self._reset_progress()
-            
-            # Restart cleanup timer
-            if hasattr(self, 'cleanup_timer'):
-                self.cleanup_timer.start(1000)
+            # Chỉ khi dừng xong mới bật lại Start
+            self.download_button.setEnabled(True)
                 
         except Exception as e:
             print(f"Error in _complete_stop_process: {e}")
@@ -529,9 +441,6 @@ class DownloadVideoTab(UIToolbarTab):
             self.stop_button.setEnabled(False)
             self._reset_progress()
             
-            # Restart cleanup timer
-            if hasattr(self, 'cleanup_timer'):
-                self.cleanup_timer.start(1000)
         except Exception as e:
             print(f"Error in force reset: {e}")
 
@@ -539,8 +448,8 @@ class DownloadVideoTab(UIToolbarTab):
         while self.running < self.max_workers and self.index <= len(self.urls) and not self.stopped:
             url = self.urls[self.index - 1]
             worker_id = self.running + 1
-            
-            thread = DownloadVideo(
+
+            task = DownloadRunnable(
                 url=url,
                 video_index=self.index,
                 total_urls=len(self.urls),
@@ -554,31 +463,31 @@ class DownloadVideoTab(UIToolbarTab):
                 subtitle_only=self.subtitle_only_flag,
                 custom_folder_name=self.download_folder
             )
-            
-            # Connect signals properly - use message_signal not message
-            thread.message_signal.connect(self._add_log_item)
-            thread.finished_signal.connect(self.handle_thread_done)
-            thread.progress_signal.connect(self.update_progress)
-            thread.error_signal.connect(self.error_thread)
-            
-            self.active_threads.append(thread)
-            thread.start()
+
+            # Connect signals
+            task.signals.message_signal.connect(self._add_log_item)
+            task.signals.finished_signal.connect(self.handle_thread_done)
+            task.signals.progress_signal.connect(self.update_progress)
+            task.signals.error_signal.connect(self.error_thread)
+            self.active_threads.append(task)
+            self.thread_pool.start(task)
             self.running += 1
             self.index += 1
 
     def handle_thread_done(self, message: str = ""):
         """Handle when a thread finishes - no parameters needed"""
         self.running -= 1
+           
+
+        # Clean up active tasks list
+        if self.active_threads:
+            # Remove one finished task marker if present
+            try:
+                self.active_threads.pop(0)
+            except Exception:
+                pass
         
-        # Clean up finished threads
-        finished_threads = [t for t in self.active_threads if not t.isRunning()]
-        for thread in finished_threads:
-            if thread in self.active_threads:
-                self.active_threads.remove(thread)
-                thread.quit()
-                thread.wait()
-                thread.deleteLater()
-        
+        # Schedule next downloads immediately if capacity available
         if not self.stopped and self.index <= len(self.urls):
             self.download_next_batch()
         elif self.running == 0:
@@ -587,10 +496,11 @@ class DownloadVideoTab(UIToolbarTab):
             else:
 
                 if message == "success":
-                        self._add_log_item("✅ Tải xong tất cả video.")
-                        self._add_log_item(
+                    self._add_log_item("✅ Tải xong tất cả video.")
+                    self._add_log_item(
                         f"📂 Video được lưu tại: {self.download_folder}")
-
+                elif message == "error":
+                    self._add_log_item("❌ Không tải được video. Bỏ qua và tiếp tục.")
                 elif message == "error_no_file":
                     self._add_log_item("❌ Không tìm thấy file đã download!")
                 elif message == "error_copy_file":
@@ -607,7 +517,9 @@ class DownloadVideoTab(UIToolbarTab):
             self._reset_progress()
 
     def error_thread(self, value):
+        # Only log error; do not reset UI here because other threads may be running
         self._add_log_item(value, "error")
+        
 
     def update_progress(self, value):
         self._update_progress(value)
@@ -711,6 +623,10 @@ class DownloadVideoTab(UIToolbarTab):
             # Stop cleanup timer
             if hasattr(self, 'cleanup_timer'):
                 self.cleanup_timer.stop()
+
+            # Stop log timer
+            if hasattr(self, '_log_timer'):
+                self._log_timer.stop()
             
             # Stop all active threads safely
             threads_to_cleanup = self.active_threads[:]
@@ -755,8 +671,7 @@ class DownloadVideoTab(UIToolbarTab):
             try:
                 self.active_threads.clear()
                 self.running = 0
-                if hasattr(self, 'cleanup_timer'):
-                    self.cleanup_timer.stop()
+
             except:
                 pass
     
@@ -836,3 +751,13 @@ class DownloadVideoTab(UIToolbarTab):
         """Handle tab close event"""
         self.cleanup_threads()
         super().closeEvent(event)
+    
+    def kill_with_taskkill():
+        for name in ("yt-dlp.exe", "ffmpeg.exe"):
+            try:
+                subprocess.run(
+                    ["taskkill", "/IM", name, "/T", "/F"],
+                    capture_output=True, text=True, check=False
+                )
+            except Exception:
+                pass
