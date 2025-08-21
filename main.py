@@ -6,7 +6,7 @@ Phiên bản tối ưu với comment tiếng Việt và cấu trúc code rõ rà
 
 from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
-    QLabel, QProgressBar, QMainWindow, QTabWidget, QStatusBar, 
+    QLabel, QProgressBar, QMainWindow, QTabWidget, QStatusBar,
     QLineEdit, QGroupBox, QListWidget, QListWidgetItem, QSizePolicy,
 )
 from PySide6.QtCore import Qt, QTimer, QTime, QEvent, Signal
@@ -23,6 +23,7 @@ from app.core.config import AppConfig
 from app.tabs.tts_tab import TTSTab
 from app.tabs.convert_tab import ConvertTab
 from app.tabs.downloadvideo_tab import DownloadVideoTab
+from app.tabs.downloadvideo_tab_1 import DownloadVideoTab1
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
 from app.utils.helps import clean_all_temp_parts
@@ -44,7 +45,8 @@ class ClickToCloseOverlay(QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Widget)
-        self.setStyleSheet("background: rgba(0,0,0,0.25);")  # Nền trong suốt với opacity 25%
+        # Nền trong suốt với opacity 25%
+        self.setStyleSheet("background: rgba(0,0,0,0.25);")
         self.hide()  # Ẩn mặc định
 
     def mousePressEvent(self, event) -> None:
@@ -60,7 +62,7 @@ class ClickToCloseOverlay(QWidget):
 class MainWindow(QMainWindow):
     """
     Cửa sổ chính của ứng dụng Text-to-Speech
-    
+
     Chức năng chính:
     - Quản lý các tab chức năng (TTS, Convert, Simple)
     - Xử lý tiến trình và trạng thái ứng dụng
@@ -74,15 +76,15 @@ class MainWindow(QMainWindow):
         Thiết lập giao diện, kết nối tín hiệu và khởi tạo trạng thái ban đầu
         """
         super().__init__()
-        
+
         # Áp dụng style cho ứng dụng
         _init_addStyle(self)
-        
+
         # Biến trạng thái nội bộ
         self._closing_history: bool = False  # Ngăn đệ quy khi đóng lịch sử
         self._setup_complete: bool = False   # Theo dõi quá trình khởi tạo
         self._show_key_auth: bool = True     # Điều khiển hiển thị group xác thực key
-        
+
         # Thiết lập các thành phần chính
         self._setup_window()
         self._setup_ui()
@@ -118,7 +120,7 @@ class MainWindow(QMainWindow):
         # Có thể bật lại nếu cần thiết lập kích thước cố định
         # self.setMinimumSize(*AppConfig.MIN_WINDOW_SIZE)
         # self.resize(*AppConfig.DEFAULT_WINDOW_SIZE)
-        
+
         # Căn giữa cửa sổ trên màn hình
         self._center_on_screen()
 
@@ -129,20 +131,22 @@ class MainWindow(QMainWindow):
         """
         # Tạo scroll area thay vì widget thông thường
         from PySide6.QtWidgets import QScrollArea
-        
+
         # Tạo scroll area làm central widget
         self.scroll_area = QScrollArea()
         self.setCentralWidget(self.scroll_area)
-        
+
         # Tạo widget chứa nội dung
         self.content_widget = QWidget()
         self.scroll_area.setWidget(self.content_widget)
-        
+
         # Thiết lập scroll area
         self.scroll_area.setWidgetResizable(True)  # Widget tự động resize
-        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Hiện thanh trượt dọc khi cần
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Hiện thanh trượt ngang khi cần
-        
+        self.scroll_area.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded)  # Hiện thanh trượt dọc khi cần
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded)  # Hiện thanh trượt ngang khi cần
+
         # Tạo layout chính cho content widget
         main_layout = QVBoxLayout(self.content_widget)
         main_layout.setSpacing(2)  # Giảm khoảng cách giữa các widget
@@ -176,6 +180,7 @@ class MainWindow(QMainWindow):
         self.tab_tts = TTSTab(self)
         # Tạo tab Download Video
         self.tab_downloadvideo = DownloadVideoTab(self)
+        self.tab_downloadvideo1 = DownloadVideoTab1(self)
         # Tạo tab Convert (mới)
         self.tab_convert = ConvertTab(self)
 
@@ -183,9 +188,9 @@ class MainWindow(QMainWindow):
         self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_convert]
 
         # Thêm tabs vào widget
+        self.tabs.addTab(self.tab_downloadvideo1, "Download Video New")
         self.tabs.addTab(self.tab_downloadvideo, "Download Video")
         self.tabs.addTab(self.tab_tts, "Text to Speech")
-      
 
     def _initialize_ui_state(self) -> None:
         """
@@ -198,7 +203,7 @@ class MainWindow(QMainWindow):
 
         # Thêm thông báo log cho trạng thái đã sẵn sàng
         self._add_log_item(
-            "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt", 
+            "🎉 Ứng dụng đã sẵn sàng - Tất cả chức năng đã được kích hoạt",
             level="info"
         )
         # Progress bar sẽ ẩn mặc định, chỉ hiện khi có giá trị
@@ -216,7 +221,7 @@ class MainWindow(QMainWindow):
         self.progress_widget = QWidget()
         progress_layout = QVBoxLayout(self.progress_widget)
         progress_layout.addStretch()
-        
+
         # Thiết lập nhóm xác thực key
         self._setup_key_auth_group(progress_layout)
 
@@ -252,7 +257,7 @@ class MainWindow(QMainWindow):
         Tạo các nút điều khiển tiến trình (Bắt đầu, Tạm dừng, Tiếp tục, Dừng)
         """
         button_layout = QHBoxLayout()
-        
+
         # Tạo các nút điều khiển
         self.btn_start = QPushButton("▶ Bắt đầu")
         self.btn_pause = QPushButton("⏸ Tạm dừng")
@@ -274,25 +279,30 @@ class MainWindow(QMainWindow):
         Thiết lập khu vực hiển thị log
         """
         self.output_list = QListWidget()
-        
+
         # Cấu hình hiển thị log
         self.output_list.setAlternatingRowColors(True)  # Màu xen kẽ các dòng
-        self.output_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)  # Cuộn mượt
-        
+        self.output_list.setVerticalScrollMode(
+            QListWidget.ScrollPerPixel)  # Cuộn mượt
+
         # Giới hạn chiều cao của log frame để không quá dài
-        self.output_list.setMaximumHeight(150)  # Giới hạn chiều cao tối đa 150px
+        # Giới hạn chiều cao tối đa 150px
+        self.output_list.setMaximumHeight(150)
         self.output_list.setMinimumHeight(100)  # Chiều cao tối thiểu 100px
-        
+
         progress_layout.addWidget(self.output_list)
 
     def _configure_progress_size_policies(self) -> None:
         """
         Cấu hình size policy cho các thành phần progress để tối ưu hiển thị
         """
-        self.progress_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.progress_bar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.progress_widget.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.progress_bar.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
         # Thay đổi size policy của output_list để không mở rộng quá mức
-        self.output_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.output_list.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Preferred)
 
     def _setup_key_auth_group(self, parent_layout: QVBoxLayout) -> None:
         """
@@ -320,7 +330,8 @@ class MainWindow(QMainWindow):
 
         # Layout ngang cho các thành phần trong group
         key_layout = QHBoxLayout(key_group)
-        key_layout.setContentsMargins(10, 5, 10, 5)  # Giảm margin cho màn hình nhỏ
+        # Giảm margin cho màn hình nhỏ
+        key_layout.setContentsMargins(10, 5, 10, 5)
 
         # Tạo các thành phần xác thực
         self._create_key_input_components(key_layout)
@@ -330,7 +341,7 @@ class MainWindow(QMainWindow):
 
         # Lưu reference để có thể toggle sau này
         self.key_auth_group = key_group
-        
+
         self._show_key_auth = False
         # Sử dụng biến điều khiển để ẩn/hiện group
         key_group.setVisible(self._show_key_auth)
@@ -437,19 +448,21 @@ class MainWindow(QMainWindow):
 
         # Thêm action để điều khiển hiển thị group xác thực key
         toggle_key_auth_action = QAction("Hiện/Ẩn xác thực key", self)
-        toggle_key_auth_action.triggered.connect(self.toggle_key_auth_visibility)
+        toggle_key_auth_action.triggered.connect(
+            self.toggle_key_auth_visibility)
         view_menu.addAction(toggle_key_auth_action)
 
         # Thêm action để ẩn group xác thực key
         hide_key_auth_action = QAction("Ẩn xác thực key", self)
-        hide_key_auth_action.triggered.connect(lambda: self.set_key_auth_visibility(False))
+        hide_key_auth_action.triggered.connect(
+            lambda: self.set_key_auth_visibility(False))
         view_menu.addAction(hide_key_auth_action)
 
         # Thêm action để hiện group xác thực key
         show_key_auth_action = QAction("Hiện xác thực key", self)
-        show_key_auth_action.triggered.connect(lambda: self.set_key_auth_visibility(True))
+        show_key_auth_action.triggered.connect(
+            lambda: self.set_key_auth_visibility(True))
         view_menu.addAction(show_key_auth_action)
-
 
         # Status bar
         self.status = QStatusBar()
@@ -501,7 +514,7 @@ class MainWindow(QMainWindow):
             self._show_key_auth = False
             if hasattr(self, 'key_auth_group') and self.key_auth_group:
                 self.key_auth_group.setVisible(self._show_key_auth)
-            
+
             self._update_tab_buttons_visibility()
 
             # Show success message in log
@@ -522,7 +535,7 @@ class MainWindow(QMainWindow):
         self._show_key_auth = not self._show_key_auth
         if hasattr(self, 'key_auth_group') and self.key_auth_group:
             self.key_auth_group.setVisible(self._show_key_auth)
-        
+
         # Log trạng thái
         status = "hiển thị" if self._show_key_auth else "ẩn"
         self._add_log_item(f"🔐 Group xác thực key: {status}", level="info")
@@ -532,12 +545,10 @@ class MainWindow(QMainWindow):
         self._show_key_auth = visible
         if hasattr(self, 'key_auth_group') and self.key_auth_group:
             self.key_auth_group.setVisible(self._show_key_auth)
-        
+
         # Log trạng thái
         status = "hiển thị" if self._show_key_auth else "ẩn"
         self._add_log_item(f"🔐 Group xác thực key: {status}", level="info")
-
-
 
     def _update_tab_buttons_visibility(self):
         """Update visibility of buttons in all tabs"""
@@ -658,19 +669,21 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'progress_widget'):
             self.progress_widget.setVisible(False)
             if tab_index == 1:
-                self.status.showMessage("Đang sẵn sàng với tab text to speech.",10_000)
+                self.status.showMessage(
+                    "Đang sẵn sàng với tab text to speech.", 10_000)
                 self.progress_widget.setVisible(True)
                 self._hide_progress_bar()
-                    # Keep log visible
+                # Keep log visible
                 if hasattr(self, 'output_list') and self.output_list:
-                        self.output_list.setVisible(True)
-            else: #inde  0
-                self.status.showMessage("Đang sẵn sàng với tab download video.",10_000)
+                    self.output_list.setVisible(True)
+            else:  # inde  0
+                self.status.showMessage(
+                    "Đang sẵn sàng với tab download video.", 10_000)
                 self.progress_widget.setVisible(True)
                 self._hide_progress_bar()
 
             # if tab_index == 2:  # Tab 3 (Simple) - Hide progress section completely
-                
+
             #     self.status.showMessage("Tab Simple - Đã ẩn progress section")
             # else:  # Tab 1 (TTS) or Tab 2 (Convert) - Show progress section
             #     self.progress_widget.setVisible(True)
@@ -704,9 +717,9 @@ class MainWindow(QMainWindow):
             #             "Tab Convert - Đã hiện progress section")
             #     # Tab 1 (TTS) - Hide progress bar initially, keep log visible
             #     elif tab_index == 0:
-                    
+
             #         self.status.showMessage("Đang sẵn sàng với tab text to speech.",10_000)
-                    # Sau 10 giây tự động xóa
+                # Sau 10 giây tự động xóa
 
             # Safe layout update after tab change
             self._safe_layout_update()
@@ -1068,10 +1081,12 @@ class MainWindow(QMainWindow):
         try:
             cleaned = clean_all_temp_parts()
             # Log to output list if available
-            self._add_log_item(f"🧹 Đã dọn {cleaned} thư mục tạm.", level="info")
+            self._add_log_item(
+                f"🧹 Đã dọn {cleaned} thư mục tạm.", level="info")
         except Exception as e:
             try:
-                self._add_log_item(f"⚠️ Lỗi khi dọn thư mục tạm: {str(e)}", level="warning")
+                self._add_log_item(
+                    f"⚠️ Lỗi khi dọn thư mục tạm: {str(e)}", level="warning")
             except Exception:
                 pass
         finally:
@@ -1099,7 +1114,7 @@ def main():
     y = 0
 
     window.move(x, y)
-    
+
     # Thiết lập cleanup khi app thoát (backup ngoài closeEvent)
     try:
         def _qt_about_to_quit():
