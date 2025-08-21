@@ -5,13 +5,14 @@ import re
 import subprocess
 import shutil
 import tempfile
+import stat
 from app.ui_setting import resource_path
 
 
 class DownloadVideo(QThread):
     message_signal = Signal(str, str)
     progress_signal = Signal(int)
-    finished_signal = Signal()
+    finished_signal = Signal(str)
     error_signal = Signal(str)
     stop_flag = False
 
@@ -52,128 +53,131 @@ class DownloadVideo(QThread):
         # print(f" temp_dir {self.temp_dir}")
 
     def run(self):
-
-        message_thread = f"[Thread {self.worker_id}] ({self.video_index}/{self.total_urls}) "
-        if self.stop_flag:
-            self.message_signal.emit(
-                f"{message_thread} ⏹ Đã dừng trước khi bắt đầu.", "")
-            self._cleanup_temp()
-            self.finished_signal.emit()
-            return
-
-        creation_flags = 0
-        if sys.platform == "win32":
-            creation_flags = subprocess.CREATE_NO_WINDOW
-
-        self.message_signal.emit(
-            f"{message_thread} 🔽 Bắt đầu tải: {self.url}", ""
-        )
-
-        # Lấy tiêu đề video
-        ytdlp_path = "yt-dlp"
-
-        if os.path.exists(self.ytdlp_path):
-            ytdlp_path = self.ytdlp_path
-
-        get_title_cmd = [ytdlp_path, "--encoding",
-                         "utf-8", "--get-title", self.url]
-        result = subprocess.run(get_title_cmd, capture_output=True,
-                                text=True, encoding="utf-8", creationflags=creation_flags)
-
-        title = result.stdout.strip().replace("/", "-").replace("\\", "-")
-        if not title:
-            self.error_signal.emit(
-                f"{message_thread} Internet của bạn có vấn đề. vui lòng check lại!",)
-            self._cleanup_temp()
-            return
-        self.message_signal.emit(
-            f"{message_thread} 🎯 Tiêu đề: {title}", "")
-
-        # Download vào thư mục tạm
-        output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
-        if self.video_mode == "Video":
-            output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
-        else:
-            output_filename = f"playlist.{self.video_index:02d}.{title}.%(ext)s"
-
-        # Đường dẫn tạm
-        temp_output = os.path.join(self.temp_dir, output_filename)
-
-        # Đường dẫn cuối cùng
-        final_output = os.path.join(self.final_dir, output_filename)
-
-        download_cmd = self._build_command(ytdlp_path, temp_output)
-
-        self.process = subprocess.Popen(
-            download_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            encoding="utf-8",
-            creationflags=creation_flags
-        )
-
-        for line in self.process.stdout:
+        try:
+            message_thread = f"[Thread {self.worker_id}] ({self.video_index}/{self.total_urls}) "
             if self.stop_flag:
-                self.process.kill()
-                self.process.terminate()
                 self.message_signal.emit(
-                    f"{message_thread} ⏹ Đã dừng tải video.", "")
+                    f"{message_thread} ⏹ Đã dừng trước khi bắt đầu.", "")
                 self._cleanup_temp()
-                self.finished_signal.emit()
+                self.finished_signal.emit(f"stop")
                 return
 
-            if line.strip():
-                self.message_signal.emit(
-                    f"{message_thread} {line.strip()}", "")
-                match = re.search(r"\[download\]\s+(\d{1,3}\.\d{1,2})%", line)
-                if match:
-                    percent = float(match.group(1))
-                    self.progress_signal.emit(int(percent))
+            creation_flags = 0
+            if sys.platform == "win32":
+                creation_flags = subprocess.CREATE_NO_WINDOW
 
-        self.process.wait()
+            self.message_signal.emit(
+                f"{message_thread} 🔽 Bắt đầu tải: {self.url}", ""
+            )
 
-        # Kiểm tra xem download có thành công không
-        if self.process.returncode != 0:
-            self.error_signal.emit(
-                f"{message_thread} ❌ Lỗi khi tải video!")
-            self._cleanup_temp()
-            return
+            # Lấy tiêu đề video
+            ytdlp_path = "yt-dlp"
 
-        self.progress_signal.emit(95)
+            if os.path.exists(self.ytdlp_path):
+                ytdlp_path = self.ytdlp_path
 
-        # Tìm file đã download trong thư mục tạm
-        downloaded_files = self._find_downloaded_files()
-        if not downloaded_files:
-            self.error_signal.emit(
-                f"{message_thread} ❌ Không tìm thấy file đã download!"),
-            self._cleanup_temp()
-            return
+            get_title_cmd = [ytdlp_path, "--encoding",
+                             "utf-8", "--get-title", self.url]
+            result = subprocess.run(get_title_cmd, capture_output=True,
+                                    text=True, encoding="utf-8", creationflags=creation_flags)
 
-            # Copy file từ thư mục tạm ra thư mục cuối cùng
-        self.message_signal.emit(
-            f"{message_thread} 📁 Đang copy file ra thư mục cuối cùng...", "")
+            title = result.stdout.strip().replace("/", "-").replace("\\", "-")
+            if not title:
+                self.error_signal.emit(
+                    f"{message_thread} Internet của bạn có vấn đề. vui lòng check lại!",)
+                self._cleanup_temp()
+                return
+            self.message_signal.emit(
+                f"{message_thread} 🎯 Tiêu đề: {title}", "")
 
-        success = self._copy_files_to_final(downloaded_files, title)
-        if success:
-            # Tìm tên file chính để hiển thị
-            main_file = self._find_main_file(downloaded_files)
-            if main_file:
-                self.message_signal.emit(
-                    f"{message_thread} ✅ Hoàn thành download và copy!", "")
+            # Download vào thư mục tạm
+            output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
+            if self.video_mode == "Video":
+                output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
             else:
-                self.message_signal.emit(
-                    f"{message_thread} ✅ Hoàn thành download!", "")
+                output_filename = f"playlist.{self.video_index:02d}.{title}.%(ext)s"
 
-            # Dọn dẹp thư mục tạm
+            # Đường dẫn tạm
+            temp_output = os.path.join(self.temp_dir, output_filename)
+
+            # Đường dẫn cuối cùng
+            final_output = os.path.join(self.final_dir, output_filename)
+
+            download_cmd = self._build_command(ytdlp_path, temp_output)
+
+            self.process = subprocess.Popen(
+                download_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                encoding="utf-8",
+                creationflags=creation_flags
+            )
+
+            for line in self.process.stdout:
+                if self.stop_flag:
+                    self.process.kill()
+                    self.process.terminate()
+                    self.message_signal.emit(
+                        f"{message_thread} ⏹ Đã dừng tải video.", "")
+                    self._cleanup_temp()
+                    self.finished_signal.emit(f"stop")
+                    return
+
+                if line.strip():
+                    self.message_signal.emit(
+                        f"{message_thread} {line.strip()}", "")
+                    match = re.search(r"\[download\]\s+(\d{1,3}\.\d{1,2})%", line)
+                    if match:
+                        percent = float(match.group(1))
+                        self.progress_signal.emit(int(percent))
+
+            self.process.wait()
+
+            # Kiểm tra xem download có thành công không
+            if self.process.returncode != 0:
+                self.error_signal.emit(
+                    f"{message_thread} ❌ Lỗi khi tải video!")
+                self._cleanup_temp()
+                return
+
+            self.progress_signal.emit(95)
+
+            # Tìm file đã download trong thư mục tạm
+            downloaded_files = self._find_downloaded_files()
+            if not downloaded_files:
+                self.error_signal.emit(
+                    f"{message_thread} ❌ Hiện tại không có file nào được download!"),
+                self._cleanup_temp()
+                self.finished_signal.emit(f"error_no_file")
+            else:
+                # Copy file từ thư mục tạm ra thư mục cuối cùng
+                self.message_signal.emit(
+                    f"{message_thread} 📁 Đang copy file ra thư mục cuối cùng...", "")
+
+                success = self._copy_files_to_final(downloaded_files, title)
+                if success:
+                    # Tìm tên file chính để hiển thị
+                    main_file = self._find_main_file(downloaded_files)
+                    if main_file:
+                        self.message_signal.emit(
+                            f"{message_thread} ✅ Hoàn thành download và copy!", "")
+                    else:
+                        self.message_signal.emit(
+                            f"{message_thread} ✅ Hoàn thành download!", "")
+
+                    # Dọn dẹp thư mục tạm
+                    self._cleanup_temp()
+                    self.finished_signal.emit(f"success")
+                else:
+                    self.error_signal.emit(
+                        f"{message_thread} ❌ Lỗi khi copy file!")
+                    self._cleanup_temp()
+                    self.finished_signal.emit(f"error_copy_file")
+        finally:
+            # Always attempt to remove temp dir
             self._cleanup_temp()
-            self.finished_signal.emit()
-        else:
-            self.error_signal.emit(
-                f"{message_thread} ❌ Lỗi khi copy file!")
-            self._cleanup_temp()
-            self.finished_signal.emit()
 
     def _find_downloaded_files(self):
         """Tìm các file đã download trong thư mục tạm"""
@@ -197,7 +201,7 @@ class DownloadVideo(QThread):
             for temp_file in temp_files:
                 filename = os.path.basename(temp_file)
                 final_file = os.path.join(self.final_dir, filename)
-                print(f"filename: {filename}")
+                # print(f"filename: {filename}")
                 # Kiểm tra xem có nên copy file này hay không dựa trên chế độ download
                 # if not self._should_copy_file(filename):
                 #     continue
@@ -388,8 +392,13 @@ class DownloadVideo(QThread):
         """Dọn dẹp thư mục tạm"""
         try:
             if hasattr(self, 'temp_dir') and os.path.exists(self.temp_dir):
-                # shutil.rmtree(self.temp_dir)
-                pass
+                def _on_rm_error(func, path, exc_info):
+                    try:
+                        os.chmod(path, stat.S_IWRITE)
+                        func(path)
+                    except Exception:
+                        pass
+                shutil.rmtree(self.temp_dir, onerror=_on_rm_error)
         except Exception as e:
             print(f"Error cleaning up temp directory: {e}")
 

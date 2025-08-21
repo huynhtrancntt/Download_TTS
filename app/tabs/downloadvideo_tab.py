@@ -566,7 +566,7 @@ class DownloadVideoTab(UIToolbarTab):
             self.running += 1
             self.index += 1
 
-    def handle_thread_done(self):
+    def handle_thread_done(self, message: str = ""):
         """Handle when a thread finishes - no parameters needed"""
         self.running -= 1
         
@@ -585,9 +585,23 @@ class DownloadVideoTab(UIToolbarTab):
             if self.stopped:
                 self._add_log_item("⏹ Đã dừng toàn bộ tiến trình.")
             else:
-                self._add_log_item("✅ Tải xong tất cả video.")
-                self._add_log_item(
-                    f"📂 Video được lưu tại: {self.download_folder}")
+
+                if message == "success":
+                        self._add_log_item("✅ Tải xong tất cả video.")
+                        self._add_log_item(
+                        f"📂 Video được lưu tại: {self.download_folder}")
+
+                elif message == "error_no_file":
+                    self._add_log_item("❌ Không tìm thấy file đã download!")
+                elif message == "error_copy_file":
+                    self._add_log_item("❌ Lỗi khi copy file!")
+                else:
+                    self._add_log_item("❌ Lỗi khi tải video!")
+                
+                bCheckFolder = self._check_and_cleanup_empty_folders(self.download_folder)
+                if bCheckFolder:
+                    self._add_log_item("✅ Đã dọn dẹp thư mục rỗng.")
+
             self.download_button.setEnabled(True)
             self.stop_button.setEnabled(False)
             self._reset_progress()
@@ -745,6 +759,78 @@ class DownloadVideoTab(UIToolbarTab):
                     self.cleanup_timer.stop()
             except:
                 pass
+    
+    def _check_and_cleanup_empty_folders(self, folder_path: str) -> bool:
+        """
+        Kiểm tra thư mục có file nào không, nếu không có thì xóa thư mục
+        Returns: True nếu thư mục được xóa, False nếu thư mục còn file
+        """
+        try:
+            if not os.path.exists(folder_path):
+                return False
+            
+            # Kiểm tra xem thư mục có file nào không
+            items = os.listdir(folder_path)
+            
+            # Lọc ra các file (không phải thư mục con)
+            files = [item for item in items if os.path.isfile(os.path.join(folder_path, item))]
+            
+            if not files:
+                # Không có file nào, xóa thư mục
+                try:
+                    os.rmdir(folder_path)  # Xóa thư mục rỗng
+                    print(f"Đã xóa thư mục rỗng: {folder_path}")
+                    return True
+                except OSError as e:
+                    # Nếu không thể xóa bằng rmdir (có thể có thư mục con rỗng)
+                    try:
+                        import shutil
+                        shutil.rmtree(folder_path)  # Xóa đệ quy
+                        print(f"Đã xóa thư mục và thư mục con: {folder_path}")
+                        return True
+                    except Exception as e2:
+                        print(f"Không thể xóa thư mục {folder_path}: {e2}")
+                        return False
+            else:
+                print(f"Thư mục {folder_path} còn {len(files)} file, không xóa")
+                return False
+                
+        except Exception as e:
+            print(f"Lỗi khi kiểm tra thư mục {folder_path}: {e}")
+            return False
+
+    def _cleanup_empty_download_folders(self, base_folder):
+        """
+        Dọn dẹp các thư mục download rỗng
+        """
+        try:
+            if not os.path.exists(base_folder):
+                return
+            
+            # Duyệt qua các thư mục ngày
+            for date_item in os.listdir(base_folder):
+                date_path = os.path.join(base_folder, date_item)
+                if os.path.isdir(date_path):
+                    # Duyệt qua các thư mục con số
+                    for sub_item in os.listdir(date_path):
+                        sub_path = os.path.join(date_path, sub_item)
+                        if os.path.isdir(sub_path) and sub_item.isdigit():
+                            # Kiểm tra và xóa thư mục rỗng
+                            self._check_and_cleanup_empty_folders(sub_path)
+                    
+                    # Kiểm tra thư mục ngày có còn thư mục con nào không
+                    remaining_subdirs = [item for item in os.listdir(date_path) 
+                                       if os.path.isdir(os.path.join(date_path, item))]
+                    if not remaining_subdirs:
+                        # Không còn thư mục con nào, xóa thư mục ngày
+                        try:
+                            os.rmdir(date_path)
+                            print(f"Đã xóa thư mục ngày rỗng: {date_path}")
+                        except Exception as e:
+                            print(f"Không thể xóa thư mục ngày {date_path}: {e}")
+                            
+        except Exception as e:
+            print(f"Lỗi khi dọn dẹp thư mục download: {e}")
 
     def closeEvent(self, event):
         """Handle tab close event"""
