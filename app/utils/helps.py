@@ -171,7 +171,6 @@ def clean_all_temp_parts():
     except Exception as e:
         print(f"Lỗi khi quét thư mục tạm: {e}")
 
-    print(f"Đã xóa {cleaned_count} thư mục tạm thời")
     return cleaned_count
 
 

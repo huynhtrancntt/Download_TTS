@@ -54,7 +54,7 @@ class AppConfig:
     DEFAULT_GAP_MS = 150                  # Khoảng cách giữa các đoạn (ms)
     DEFAULT_WORKERS_CHUNK = 4             # Số luồng xử lý chunk
     DEFAULT_WORKERS_FILE = 2              # Số luồng xử lý file
-    DEFAULT_WORKERS_PLAYER = 4            # Số luồng cho player
+    DEFAULT_WORKERS_PLAYER = 2            # Số luồng cho player
 
     # Danh sách giọng nói có sẵn
     VOICE_CHOICES = [

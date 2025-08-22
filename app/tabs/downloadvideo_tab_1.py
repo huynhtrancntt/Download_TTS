@@ -189,7 +189,7 @@ class DownloadVideoTab1(UIToolbarTab):
             placeholderText="Nhập URL video hoặc văn bản tại đây..."
         )
         self.url_inputdownloadvideo.setPlainText(
-            "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+            f"https://www.youtube.com/watch?v=BtxAPNXGgd8")
         self.url_inputdownloadvideo.setMinimumHeight(
             200)  # Chiều cao tối thiểu 100px
         content_layout.addWidget(self.url_inputdownloadvideo, 2)
@@ -222,11 +222,12 @@ class DownloadVideoTab1(UIToolbarTab):
 
         # Create new worker
         self.worker = NTDownloadWorker(
-            "", "vi-VN-HoaiMyNeural", 0, 0, 500, self.theard.value())
+            self.url_inputdownloadvideo.toPlainText(), "vi-VN-HoaiMyNeural", 0, 0, 500, self.theard.value())
 
         # Connect signals
         self.worker.segment_ready.connect(self.on_segment_ready)
         self.worker.progress.connect(self.on_produce_progress)
+        self.worker.progress_single.connect(self.on_update_progress)
         self.worker.status.connect(self.on_status)
         self.worker.all_done.connect(self.on_all_done)
         self.worker.error.connect(self.on_error)
@@ -279,9 +280,12 @@ class DownloadVideoTab1(UIToolbarTab):
 
         self._update_progress(int(emitted / total * 100))
 
+    def on_update_progress(self,  total: int) -> None:
+        self._update_progress(total)
+
     def on_status(self, status: str) -> None:
 
-        print(f"{status}")
+        self._add_log_item(status)
 
     def on_all_done(self) -> None:
 
@@ -345,3 +349,46 @@ class DownloadVideoTab1(UIToolbarTab):
                 self.parent_main.progress_bar.setValue(value)
         except Exception as e:
             print(f"[TTS PROGRESS ERROR] {e}")
+
+    def stop_all(self) -> None:
+        """Stop all processes"""
+        # Stop TTS worker
+        if getattr(self, "worker", None) and self.worker.isRunning():
+            try:
+                self.worker.stop()
+                # Wait for worker to stop completely
+                if self.worker.wait(3000):  # Wait max 3 seconds
+                    pass
+                else:
+                    self.worker.terminate()
+                    self.worker.wait(1000)
+
+                # Reset worker reference
+                self.worker = None
+            except Exception as e:
+                print(f"Warning: Error stopping worker in stop_all: {e}")
+                # Force cleanup
+                try:
+                    if self.worker:
+                        self.worker.terminate()
+                        self.worker.wait(1000)
+                        self.worker = None
+                except:
+                    pass
+
+    def closeEvent(self, event) -> None:
+        """Handle tab close event"""
+        try:
+            self.stop_all()
+        except Exception as e:
+            print(f"Warning: Error in closeEvent: {e}")
+            # Force cleanup
+            try:
+                if hasattr(self, 'worker') and self.worker:
+                    self.worker.terminate()
+                    self.worker.wait(1000)
+                    self.worker = None
+            except:
+                pass
+
+        super().closeEvent(event)

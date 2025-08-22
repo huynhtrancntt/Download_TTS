@@ -59,6 +59,13 @@ class DownloadRunnable(QRunnable):
                 self.signals.finished_signal.emit("stop")
                 return
 
+            # Kiểm tra đường dẫn yt-dlp
+            if not os.path.exists(self.ytdlp_path):
+                self.signals.error_signal.emit(
+                    f"{message_thread} ❌ Không tìm thấy yt-dlp tại: {self.ytdlp_path}")
+                self.signals.finished_signal.emit("error_no_ytdlp")
+                return
+
             creation_flags = 0
             if sys.platform == "win32":
                 creation_flags = subprocess.CREATE_NO_WINDOW | getattr(
@@ -67,53 +74,30 @@ class DownloadRunnable(QRunnable):
             self.signals.message_signal.emit(
                 f"{message_thread} 🔽 Bắt đầu tải: {self.url}", ""
             )
-            delay = random.uniform(2, 15)  # số thực, ví dụ 7.38 giây
-            print(f"delay {delay}s")
-            time.sleep(delay)
-            print(f"xong delay {delay}s")
-            ytdlp_path = "yt-dlp"
-            if os.path.exists(self.ytdlp_path):
-                ytdlp_path = self.ytdlp_path
-            get_title_cmd = [ytdlp_path, "--encoding",
-                             "utf-8", "--get-title", self.url , "--no-warnings","--no-check-certificate"]
-           
-            result = subprocess.run(
-                    get_title_cmd,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    creationflags=creation_flags,
-                )
-            # print(result)
 
-            title = result.stdout.strip().replace("/", "-").replace("\\", "-")
-            if title == "":
-                self.signals.message_signal.emit(
-                    f"{message_thread} ❌ Không tải được video. Bỏ qua và tiếp tục.", "")
-                self.signals.finished_signal.emit("error")
-                return
-            # if not title:
-            #     self.signals.error_signal.emit(
-            #         f"{message_thread} Internet của bạn có vấn đề. vui lòng check lại!",)
-            #     self._cleanup_temp()
-            #     self.signals.finished_signal.emit("error")
-            #     return
-            self.signals.message_signal.emit(
-                        f"{message_thread} Đang tải video {title}", "")
-                        
-            output_filename = f"{self.video_index:02d}.{title}.%(ext)s"
+            output_template = f"video_{self.video_index:02d}_%(title)s.%(ext)s"
             if self.video_mode != "Video":
-                output_filename = f"playlist.{self.video_index:02d}.{title}.%(ext)s"
+                output_template = f"playlist_{self.video_index:02d}_%(title)s.%(ext)s"
 
             self.temp_dir = tempfile.mkdtemp(prefix="yt_download_")
-            temp_output = os.path.join(self.temp_dir, output_filename)
-            # final_output = os.path.join(self.final_dir, output_filename)
-
+            temp_output = os.path.join(self.temp_dir, output_template)
+            # Sử dụng đường dẫn đầy đủ đến yt-dlp.exe
+            ytdlp_path = self.ytdlp_path if os.path.exists(self.ytdlp_path) else "yt-dlp"
             download_cmd = self._build_command(ytdlp_path, temp_output)
-            delay = random.uniform(4, 10)  # số thực, ví dụ 7.38 giây
-            print(f"delay {delay}s")
-            time.sleep(delay)
-            print(f"xong delay {delay}s")
+            
+            # Kiểm tra lệnh download
+            if not download_cmd:
+                self.signals.error_signal.emit(
+                    f"{message_thread} ❌ Lỗi khi tạo lệnh download")
+                self._cleanup_temp()
+                self.signals.finished_signal.emit("error_cmd")
+                return
+                
+            base_delay = random.randint(10, 20)
+            thread_delay = (self.worker_id - 1) * 2
+            total_delay = base_delay + thread_delay
+            self.signals.message_signal.emit(f"{message_thread} ⏳ Chờ {total_delay}s trước khi tải video","")
+            time.sleep(total_delay)
 
             self.process = subprocess.Popen(
                 download_cmd,
@@ -172,7 +156,8 @@ class DownloadRunnable(QRunnable):
             else:
                 self.signals.message_signal.emit(
                     f"{message_thread} 📁 Đang copy file ra thư mục cuối cùng...", "")
-                success = self._copy_files_to_final(downloaded_files, title)
+                # Copy từng file từ thư mục tạm vào final_dir
+                success = self._copy_files_to_final(downloaded_files)
                 if success:
                     main_file = self._find_main_file(downloaded_files)
                     if main_file:
@@ -203,30 +188,78 @@ class DownloadRunnable(QRunnable):
             return []
 
 
-    def _copy_files_to_final(self, temp_files, title):
+    def _copy_files_to_final(self, temp_files):
         try:
+            # Tạo thư mục đích nếu chưa tồn tại
+            if not self.final_dir:
+                self.final_dir = "output"  # Thư mục mặc định
+            
             os.makedirs(self.final_dir, exist_ok=True)
-            for temp_file in temp_files:
-                filename = os.path.basename(temp_file)
-                final_file = os.path.join(self.final_dir, filename)
-                if self._is_video_file(filename):
-                    if not self._copy_video_file(temp_file, final_file):
-                        return False
-                elif self._is_audio_file(filename):
-                    if not self._copy_audio_file(temp_file, final_file):
-                        return False
-                elif self._is_subtitle_file(filename):
-                    if not self._copy_subtitle_file(temp_file, final_file):
-                        return False
-                elif self._is_thumbnail_file(filename):
-                    if not self._copy_thumbnail_file(temp_file, final_file):
-                        return False
-                else:
-                    if not self._copy_other_file(temp_file, final_file):
-                        return False
-            return True
+            
+            copied_count = 0
+            total_files = len(temp_files)
+            
+            print(f"Bắt đầu copy {total_files} file từ thư mục tạm: {self.temp_dir}")
+            print(f"Thư mục đích: {self.final_dir}")
+            
+            for i, temp_file in enumerate(temp_files, 1):
+                try:
+                    filename = os.path.basename(temp_file)
+                    final_file = os.path.join(self.final_dir, filename)
+                    
+                    print(f"[{i}/{total_files}] Đang copy: {filename}")
+                    
+                    # Kiểm tra file nguồn có tồn tại không
+                    if not os.path.exists(temp_file):
+                        print(f"  ❌ Source file not found: {temp_file}")
+                        continue
+                    
+                    # Kiểm tra file đích đã tồn tại chưa
+                    if os.path.exists(final_file):
+                        print(f"  ⚠️  File đích đã tồn tại, sẽ ghi đè: {filename}")
+                    
+                    if self._is_video_file(filename):
+                        if self._copy_video_file(temp_file, final_file):
+                            copied_count += 1
+                            print(f"  ✅ Đã copy video file: {filename}")
+                        else:
+                            print(f"  ❌ Failed to copy video file: {filename}")
+                    elif self._is_audio_file(filename):
+                        if self._copy_audio_file(temp_file, final_file):
+                            copied_count += 1
+                            print(f"  ✅ Đã copy audio file: {filename}")
+                        else:
+                            print(f"  ❌ Failed to copy audio file: {filename}")
+                    elif self._is_subtitle_file(filename):
+                        if self._copy_subtitle_file(temp_file, final_file):
+                            copied_count += 1
+                            print(f"  ✅ Đã copy subtitle file: {filename}")
+                        else:
+                            print(f"  ❌ Failed to copy subtitle file: {filename}")
+                    elif self._is_thumbnail_file(filename):
+                        if self._copy_thumbnail_file(temp_file, final_file):
+                            copied_count += 1
+                            print(f"  ✅ Đã copy thumbnail file: {filename}")
+                        else:
+                            print(f"  ❌ Failed to copy thumbnail file: {filename}")
+                    else:
+                        if self._copy_other_file(temp_file, final_file):
+                            copied_count += 1
+                            print(f"  ✅ Đã copy other file: {filename}")
+                        else:
+                            print(f"  ❌ Failed to copy other file: {filename}")
+                            
+                except Exception as e:
+                    print(f"  ❌ Error copying file {temp_file}: {e}")
+                    continue
+            
+            print(f"Hoàn thành copy: {copied_count}/{total_files} file thành công")
+            
+            # Trả về True nếu có ít nhất 1 file được copy thành công
+            return copied_count > 0
+            
         except Exception as e:
-            print(f"Error copying files (runnable): {e}")
+            print(f"Error in _copy_files_to_final: {e}")
             return False
 
     def _find_main_file(self, temp_files):
@@ -342,14 +375,14 @@ class DownloadRunnable(QRunnable):
         if self.subtitle_only:
             # Chỉ tải phụ đề
             cmd.append("--skip-download")
-            self.message_signal.emit("📝 Chế độ: Chỉ tải phụ đề", "")
+            # Không emit signal ở đây vì method này không có access đến signals
         else:
             # Tải cả video MP4 và audio MP3
             cmd += ["-f", "bv*+ba/b", "--merge-output-format", "mp4"]
 
         if self.audio_only:
             cmd += ["--extract-audio", "--audio-format", "mp3", "--keep-video"]
-            self.message_signal.emit("🎬 Chế độ: Tải MP3", "")
+            # Không emit signal ở đây vì method này không có access đến signals
 
         cmd += ["-o", output]
 
