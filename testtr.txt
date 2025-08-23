@@ -136,3 +136,192 @@
 [2025-08-23 17:17:56]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_dpistg79\translate_segment_000_1755944265.mp3
 [2025-08-23 17:17:56]    Thời lượng: 1300ms
 [2025-08-23 17:17:56]    File size: 10512 bytes
+[2025-08-23 17:21:01] 🎵 Bắt đầu tạo 9 đoạn audio cho source
+[2025-08-23 17:21:01]    Ngôn ngữ: vi
+[2025-08-23 17:21:01]    Đoạn 1: Cách sử dụng:
+[2025-08-23 17:21:01]    Đoạn 2: 1. Bấm "🔊 Chuyển đổi" để tạo TTS
+[2025-08-23 17:21:01]    Đoạn 3: 2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+[2025-08-23 17:21:01]    Đoạn 4: - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+[2025-08-23 17:21:01]    Đoạn 5: - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+[2025-08-23 17:21:01]    Đoạn 6: - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại
+[2025-08-23 17:21:01]    Đoạn 7: 3. Bấm "✂️ Ngắt đoạn" để tạo khoảng nghỉ theo tùy chọn
+[2025-08-23 17:21:01]    Đoạn 8: 4. Bấm "🎬 Thêm Video" để thêm video mới
+[2025-08-23 17:21:01]    Đoạn 9: 5. Video sẽ tạo ra audio 3 giây và audio cũ vẫn được giữ nguyên
+[2025-08-23 17:21:01] ✅ Đã tạo xong đoạn 1/9
+[2025-08-23 17:21:01]    Text: Cách sử dụng:
+[2025-08-23 17:21:01]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:01]    Duration: 1300ms
+[2025-08-23 17:21:01]    File size: 10512 bytes
+[2025-08-23 17:21:02] ✅ Đã tạo xong đoạn 2/9
+[2025-08-23 17:21:02]    Text: 1. Bấm "🔊 Chuyển đổi" để tạo TTS
+[2025-08-23 17:21:02]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_001_1755944461.mp3
+[2025-08-23 17:21:02]    Duration: 3200ms
+[2025-08-23 17:21:02]    File size: 28224 bytes
+[2025-08-23 17:21:02] ✅ Đã tạo xong đoạn 3/9
+[2025-08-23 17:21:02]    Text: 2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+[2025-08-23 17:21:02]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_002_1755944462.mp3
+[2025-08-23 17:21:02]    Duration: 5200ms
+[2025-08-23 17:21:02]    File size: 24192 bytes
+[2025-08-23 17:21:02] ✅ Đã tạo xong đoạn 4/9
+[2025-08-23 17:21:02]    Text: - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+[2025-08-23 17:21:02]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_003_1755944462.mp3
+[2025-08-23 17:21:02]    Duration: 6700ms
+[2025-08-23 17:21:02]    File size: 27936 bytes
+[2025-08-23 17:21:03] ✅ Đã tạo xong đoạn 5/9
+[2025-08-23 17:21:03]    Text: - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+[2025-08-23 17:21:03]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_004_1755944462.mp3
+[2025-08-23 17:21:03]    Duration: 6700ms
+[2025-08-23 17:21:03]    File size: 28512 bytes
+[2025-08-23 17:21:03] ✅ Đã tạo xong đoạn 6/9
+[2025-08-23 17:21:03]    Text: - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại
+[2025-08-23 17:21:03]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_005_1755944463.mp3
+[2025-08-23 17:21:03]    Duration: 5100ms
+[2025-08-23 17:21:03]    File size: 21600 bytes
+[2025-08-23 17:21:04] ✅ Đã tạo xong đoạn 7/9
+[2025-08-23 17:21:04]    Text: 3. Bấm "✂️ Ngắt đoạn" để tạo khoảng nghỉ theo tùy chọn
+[2025-08-23 17:21:04]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_006_1755944463.mp3
+[2025-08-23 17:21:04]    Duration: 5400ms
+[2025-08-23 17:21:04]    File size: 26496 bytes
+[2025-08-23 17:21:04] ✅ Đã tạo xong đoạn 8/9
+[2025-08-23 17:21:04]    Text: 4. Bấm "🎬 Thêm Video" để thêm video mới
+[2025-08-23 17:21:04]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_007_1755944464.mp3
+[2025-08-23 17:21:04]    Duration: 3900ms
+[2025-08-23 17:21:04]    File size: 27216 bytes
+[2025-08-23 17:21:05] ✅ Đã tạo xong đoạn 9/9
+[2025-08-23 17:21:05]    Text: 5. Video sẽ tạo ra audio 3 giây và audio cũ vẫn được giữ nguyên
+[2025-08-23 17:21:05]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_008_1755944464.mp3
+[2025-08-23 17:21:05]    Duration: 6300ms
+[2025-08-23 17:21:05]    File size: 32256 bytes
+[2025-08-23 17:21:05]  Đã tạo xong tất cả 9 đoạn, bắt đầu phát!
+[2025-08-23 17:21:05] 🎵 Bắt đầu phát tất cả đoạn audio!
+[2025-08-23 17:21:05] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:05]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:05]    Thời lượng: 1300ms
+[2025-08-23 17:21:05]    File size: 10512 bytes
+[2025-08-23 17:21:07] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:07]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:07]    Thời lượng: 1300ms
+[2025-08-23 17:21:07]    File size: 10512 bytes
+[2025-08-23 17:21:09] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:09]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:09]    Thời lượng: 1300ms
+[2025-08-23 17:21:09]    File size: 10512 bytes
+[2025-08-23 17:21:12] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:12]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:12]    Thời lượng: 1300ms
+[2025-08-23 17:21:12]    File size: 10512 bytes
+[2025-08-23 17:21:14] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:14]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:14]    Thời lượng: 1300ms
+[2025-08-23 17:21:14]    File size: 10512 bytes
+[2025-08-23 17:21:16] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:16]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:16]    Thời lượng: 1300ms
+[2025-08-23 17:21:16]    File size: 10512 bytes
+[2025-08-23 17:21:19] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:19]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:19]    Thời lượng: 1300ms
+[2025-08-23 17:21:19]    File size: 10512 bytes
+[2025-08-23 17:21:21] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:21]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:21]    Thời lượng: 1300ms
+[2025-08-23 17:21:21]    File size: 10512 bytes
+[2025-08-23 17:21:24] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:24]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:24]    Thời lượng: 1300ms
+[2025-08-23 17:21:24]    File size: 10512 bytes
+[2025-08-23 17:21:26] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:26]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:26]    Thời lượng: 1300ms
+[2025-08-23 17:21:26]    File size: 10512 bytes
+[2025-08-23 17:21:28] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:28]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:28]    Thời lượng: 1300ms
+[2025-08-23 17:21:28]    File size: 10512 bytes
+[2025-08-23 17:21:31] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:31]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:31]    Thời lượng: 1300ms
+[2025-08-23 17:21:31]    File size: 10512 bytes
+[2025-08-23 17:21:33] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:33]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:33]    Thời lượng: 1300ms
+[2025-08-23 17:21:33]    File size: 10512 bytes
+[2025-08-23 17:21:36] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:36]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:36]    Thời lượng: 1300ms
+[2025-08-23 17:21:36]    File size: 10512 bytes
+[2025-08-23 17:21:38] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:38]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:38]    Thời lượng: 1300ms
+[2025-08-23 17:21:38]    File size: 10512 bytes
+[2025-08-23 17:21:40] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:21:40]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_gr87ecr1\translate_segment_000_1755944461.mp3
+[2025-08-23 17:21:40]    Thời lượng: 1300ms
+[2025-08-23 17:21:40]    File size: 10512 bytes
+[2025-08-23 17:22:49] 🎵 Bắt đầu tạo 9 đoạn audio cho source
+[2025-08-23 17:22:49]    Ngôn ngữ: vi
+[2025-08-23 17:22:49]    Đoạn 1: Cách sử dụng:
+[2025-08-23 17:22:49]    Đoạn 2: 1. Bấm "🔊 Chuyển đổi" để tạo TTS
+[2025-08-23 17:22:49]    Đoạn 3: 2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+[2025-08-23 17:22:49]    Đoạn 4: - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+[2025-08-23 17:22:49]    Đoạn 5: - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+[2025-08-23 17:22:49]    Đoạn 6: - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại
+[2025-08-23 17:22:49]    Đoạn 7: 3. Bấm "✂️ Ngắt đoạn" để tạo khoảng nghỉ theo tùy chọn
+[2025-08-23 17:22:49]    Đoạn 8: 4. Bấm "🎬 Thêm Video" để thêm video mới
+[2025-08-23 17:22:49]    Đoạn 9: 5. Video sẽ tạo ra audio 3 giây và audio cũ vẫn được giữ nguyên
+[2025-08-23 17:22:49] ✅ Đã tạo xong đoạn 1/9
+[2025-08-23 17:22:49]    Text: Cách sử dụng:
+[2025-08-23 17:22:49]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_000_1755944569.mp3
+[2025-08-23 17:22:49]    Duration: 1300ms
+[2025-08-23 17:22:49]    File size: 10512 bytes
+[2025-08-23 17:22:49] ✅ Đã tạo xong đoạn 2/9
+[2025-08-23 17:22:49]    Text: 1. Bấm "🔊 Chuyển đổi" để tạo TTS
+[2025-08-23 17:22:49]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_001_1755944569.mp3
+[2025-08-23 17:22:49]    Duration: 3200ms
+[2025-08-23 17:22:49]    File size: 28224 bytes
+[2025-08-23 17:22:50] ✅ Đã tạo xong đoạn 3/9
+[2025-08-23 17:22:50]    Text: 2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+[2025-08-23 17:22:50]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_002_1755944569.mp3
+[2025-08-23 17:22:50]    Duration: 5200ms
+[2025-08-23 17:22:50]    File size: 24192 bytes
+[2025-08-23 17:22:50] ✅ Đã tạo xong đoạn 4/9
+[2025-08-23 17:22:50]    Text: - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+[2025-08-23 17:22:50]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_003_1755944570.mp3
+[2025-08-23 17:22:50]    Duration: 6700ms
+[2025-08-23 17:22:50]    File size: 27936 bytes
+[2025-08-23 17:22:51] ✅ Đã tạo xong đoạn 5/9
+[2025-08-23 17:22:51]    Text: - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+[2025-08-23 17:22:51]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_004_1755944570.mp3
+[2025-08-23 17:22:51]    Duration: 6700ms
+[2025-08-23 17:22:51]    File size: 28512 bytes
+[2025-08-23 17:22:51] ✅ Đã tạo xong đoạn 6/9
+[2025-08-23 17:22:51]    Text: - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại
+[2025-08-23 17:22:51]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_005_1755944571.mp3
+[2025-08-23 17:22:51]    Duration: 5100ms
+[2025-08-23 17:22:51]    File size: 21600 bytes
+[2025-08-23 17:22:51] ✅ Đã tạo xong đoạn 7/9
+[2025-08-23 17:22:51]    Text: 3. Bấm "✂️ Ngắt đoạn" để tạo khoảng nghỉ theo tùy chọn
+[2025-08-23 17:22:51]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_006_1755944571.mp3
+[2025-08-23 17:22:51]    Duration: 5400ms
+[2025-08-23 17:22:51]    File size: 26496 bytes
+[2025-08-23 17:22:52] ✅ Đã tạo xong đoạn 8/9
+[2025-08-23 17:22:52]    Text: 4. Bấm "🎬 Thêm Video" để thêm video mới
+[2025-08-23 17:22:52]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_007_1755944571.mp3
+[2025-08-23 17:22:52]    Duration: 3900ms
+[2025-08-23 17:22:52]    File size: 27216 bytes
+[2025-08-23 17:22:52] ✅ Đã tạo xong đoạn 9/9
+[2025-08-23 17:22:52]    Text: 5. Video sẽ tạo ra audio 3 giây và audio cũ vẫn được giữ nguyên
+[2025-08-23 17:22:52]    Audio path: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_008_1755944572.mp3
+[2025-08-23 17:22:52]    Duration: 6300ms
+[2025-08-23 17:22:52]    File size: 32256 bytes
+[2025-08-23 17:22:52]  Đã tạo xong tất cả 9 đoạn, bắt đầu phát!
+[2025-08-23 17:22:52] 🎵 Bắt đầu phát tất cả đoạn audio!
+[2025-08-23 17:22:52] 🔊 Đang đọc đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:22:52]  Chuyển sang đoạn 1/9: Cách sử dụng:
+[2025-08-23 17:22:52]    Phát file: C:\Users\HT\AppData\Local\Temp\translate_tts_qd94f7bj\translate_segment_000_1755944569.mp3
+[2025-08-23 17:22:52]    File size: 10512 bytes
+[2025-08-23 17:22:54]  Chuyển sang đoạn 2/9: 1. Bấm "🔊 Chuyển đổi" để tạo TTS
+[2025-08-23 17:22:59]  Chuyển sang đoạn 3/9: 2. Phát audio để di chuyển đến vị trí cần ngắt đoạn:
+[2025-08-23 17:23:04]  Chuyển sang đoạn 4/9: - Ở ĐẦU segment (trong vòng 1 giây đầu) → Khoảng nghỉ TRƯỚC segment
+[2025-08-23 17:23:09]  Chuyển sang đoạn 5/9: - Ở CUỐI segment (trong vòng 1 giây cuối) → Khoảng nghỉ SAU segment
+[2025-08-23 17:23:14]  Chuyển sang đoạn 6/9: - Ở GIỮA segment → Khoảng nghỉ SAU segment hiện tại

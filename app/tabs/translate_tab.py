@@ -545,6 +545,14 @@ class TranslateTab(UIToolbarTab):
         if self.batch_worker and self.batch_worker.isRunning():
             self.batch_worker.stop()
         
+        # Dừng phát audio nếu đang phát
+        if hasattr(self, 'audio_player') and self.audio_player:
+            self.audio_player.stop()
+        
+        # Dừng phát tuần tự
+        if hasattr(self, 'is_playing_sequence'):
+            self.is_playing_sequence = False
+        
         self.stop_button.setEnabled(False)
         self._add_log_item("⏹ Đã dừng dịch thuật")
 
@@ -804,6 +812,10 @@ class TranslateTab(UIToolbarTab):
         # Đánh dấu không còn phát audio
         if hasattr(self, 'is_playing_audio'):
             self.is_playing_audio = False
+            
+        # Đánh dấu không còn phát tuần tự
+        if hasattr(self, 'is_playing_sequence'):
+            self.is_playing_sequence = False
 
     def _read_source_text(self) -> None:
         """Đọc văn bản nguồn bằng TTS"""
@@ -1054,13 +1066,26 @@ class TranslateTab(UIToolbarTab):
                 self.audio_player.audio_output.setVolume(0.8)  # Set volume 80%
                 self.audio_player.audio_output.setMuted(False)  # Đảm bảo không bị mute
             
-            # Kết nối signal để biết khi nào audio phát xong
+            # Ngắt kết nối signal cũ nếu có
+            try:
+                if hasattr(self.audio_player, 'playback_state_changed'):
+                    self.audio_player.playback_state_changed.disconnect()
+                if hasattr(self.audio_player, 'segment_changed'):
+                    self.audio_player.segment_changed.disconnect()
+            except:
+                pass
+            
+            # Kết nối signal để theo dõi segment thay đổi
+            if hasattr(self.audio_player, 'segment_changed'):
+                self.audio_player.segment_changed.connect(self._on_segment_changed)
+            
+            # Kết nối signal để biết khi nào audio dừng hoàn toàn
             if hasattr(self.audio_player, 'playback_state_changed'):
                 self.audio_player.playback_state_changed.connect(self._on_playback_state_changed)
             
             # Bắt đầu phát từ đoạn đầu tiên
             self.current_play_index = 0
-            self._play_next_chunk()
+            self.is_playing_sequence = True  # Flag để kiểm soát việc phát tuần tự
             
             # Cập nhật UI
             if self.current_text_type == "source":
@@ -1071,17 +1096,25 @@ class TranslateTab(UIToolbarTab):
             self._add_log_item("🎵 Bắt đầu phát tất cả đoạn audio!")
             self._write_log_to_file("🎵 Bắt đầu phát tất cả đoạn audio!")
             
+            # Bắt đầu phát từ đoạn đầu tiên
+            self._play_current_chunk()
+            
         except Exception as e:
             self._add_log_item(f"❌ Lỗi khi bắt đầu phát: {str(e)}")
             self._write_log_to_file(f"❌ Lỗi khi bắt đầu phát: {str(e)}")
             self._reset_read_buttons()
 
-    def _play_next_chunk(self) -> None:
-        """Phát đoạn audio tiếp theo"""
+    def _play_current_chunk(self) -> None:
+        """Phát đoạn audio hiện tại"""
+        # Kiểm tra xem có đang phát tuần tự không
+        if not hasattr(self, 'is_playing_sequence') or not self.is_playing_sequence:
+            return
+            
         if self.current_play_index >= len(self.audio_segments):
             # Đã phát xong tất cả
             self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
             self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
+            self.is_playing_sequence = False
             self._reset_read_buttons()
             return
         
@@ -1097,12 +1130,12 @@ class TranslateTab(UIToolbarTab):
             
             # Kiểm tra file audio có tồn tại không
             audio_path = self.audio_segments[self.current_play_index]
-            if not os.path.exists(audio_path):
+            if not audio_path or not os.path.exists(audio_path):
                 self._add_log_item(f"❌ File audio không tồn tại: {audio_path}")
                 self._write_log_to_file(f"❌ File audio không tồn tại: {audio_path}")
                 # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
                 self.current_play_index += 1
-                self._play_next_chunk()
+                QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
                 return
             
             # Kiểm tra file size
@@ -1112,7 +1145,7 @@ class TranslateTab(UIToolbarTab):
                 self._write_log_to_file(f"❌ File audio rỗng: {audio_path}")
                 # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
                 self.current_play_index += 1
-                self._play_next_chunk()
+                QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
                 return
             
             # Dừng audio hiện tại nếu đang phát
@@ -1122,17 +1155,11 @@ class TranslateTab(UIToolbarTab):
             # Phát đoạn hiện tại
             self.audio_player.play_segment(self.current_play_index)
             
-            # Lấy thời lượng của đoạn hiện tại
-            duration = self.audio_durations[self.current_play_index]
-            
             # Ghi log thông tin phát
             self._write_log_to_file(f"   Phát file: {audio_path}")
-            self._write_log_to_file(f"   Thời lượng: {duration}ms")
             self._write_log_to_file(f"   File size: {file_size} bytes")
             
-            # Lên lịch phát đoạn tiếp theo sau khi audio hiện tại phát xong
-            # Thêm buffer 1 giây để đảm bảo audio phát xong hoàn toàn
-            QTimer.singleShot(duration + 1000, self._play_next_chunk)
+            # KHÔNG dùng QTimer ở đây - để AudioPlayer tự động chuyển segment
             
         except Exception as e:
             error_msg = f"❌ Lỗi khi phát đoạn {self.current_play_index + 1}: {str(e)}"
@@ -1140,16 +1167,52 @@ class TranslateTab(UIToolbarTab):
             self._write_log_to_file(error_msg)
             # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
             self.current_play_index += 1
-            self._play_next_chunk()
+            QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
+
+    def _on_segment_changed(self, segment_index: int) -> None:
+        """Xử lý khi segment thay đổi trong AudioPlayer"""
+        try:
+            if not hasattr(self, 'is_playing_sequence') or not self.is_playing_sequence:
+                return
+                
+            # Cập nhật index hiện tại
+            self.current_play_index = segment_index
+            
+            # Ghi log
+            if segment_index < len(self.current_chunks):
+                current_text = self.current_chunks[segment_index]
+                self._add_log_item(f" Chuyển sang đoạn {segment_index + 1}/{len(self.current_chunks)}")
+                self._write_log_to_file(f" Chuyển sang đoạn {segment_index + 1}/{len(self.current_chunks)}: {current_text[:100]}{'...' if len(current_text) > 100 else ''}")
+            
+            # Kiểm tra xem đã phát xong tất cả chưa
+            if segment_index >= len(self.audio_segments) - 1:
+                # Đã phát xong tất cả
+                self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
+                self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
+                self.is_playing_sequence = False
+                self._reset_read_buttons()
+                
+        except Exception as e:
+            error_msg = f"❌ Lỗi khi xử lý segment thay đổi: {str(e)}"
+            self._add_log_item(error_msg)
+            self._write_log_to_file(error_msg)
 
     def _on_playback_state_changed(self, is_playing: bool) -> None:
         """Xử lý khi trạng thái phát audio thay đổi"""
         try:
-            if not is_playing:
-                # Audio đã dừng (phát xong hoặc bị dừng)
-                # Chuyển sang đoạn tiếp theo
-                self.current_play_index += 1
-                self._play_next_chunk()
+            # Chỉ xử lý khi đang phát tuần tự và audio dừng hoàn toàn
+            if hasattr(self, 'is_playing_sequence') and self.is_playing_sequence and not is_playing:
+                # Kiểm tra xem có phải đã phát xong tất cả không
+                if self.current_play_index >= len(self.audio_segments) - 1:
+                    # Đã phát xong tất cả
+                    self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
+                    self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
+                    self.is_playing_sequence = False
+                    self._reset_read_buttons()
+                else:
+                    # Audio dừng giữa chừng, có thể do lỗi
+                    self._add_log_item(f"⚠️ Audio dừng giữa chừng tại đoạn {self.current_play_index + 1}")
+                    self._write_log_to_file(f"⚠️ Audio dừng giữa chừng tại đoạn {self.current_play_index + 1}")
                 
         except Exception as e:
             error_msg = f"❌ Lỗi khi xử lý trạng thái phát: {str(e)}"
