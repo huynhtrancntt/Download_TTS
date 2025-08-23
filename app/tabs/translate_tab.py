@@ -24,6 +24,8 @@ from langdetect import detect, DetectorFactory
 from deep_translator import GoogleTranslator
 
 from app.workers.translate_workers import MultiThreadTranslateWorker, BatchTranslateWorker
+from app.core.audio_player import AudioPlayer
+from app.workers.TTS_workers import MTProducerWorker
 
 
 LANGS = [
@@ -81,7 +83,10 @@ class TranslateTab(UIToolbarTab):
         self.thread_pool = QThreadPool()
         self.thread_pool.setMaxThreadCount(10)  # Tối đa 10 thread
         
-
+        # Audio system
+        self.audio_player: Optional[AudioPlayer] = None
+        self.tts_worker: Optional[MTProducerWorker] = None
+        self.is_playing_sequence = False
         
         # Log file
         self.log_file_path = "testtr.txt"
@@ -106,6 +111,9 @@ class TranslateTab(UIToolbarTab):
         self._setup_header_section(root_layout)
         self._setup_content_section(root_layout)
         self._setup_bottom_section(root_layout)
+        
+        # Setup audio system
+        self._setup_audio_system()
 
     def _setup_header_section(self, root_layout: QVBoxLayout) -> None:
 
@@ -138,6 +146,18 @@ class TranslateTab(UIToolbarTab):
         self._create_btn_downloadvideo(bottom_layout)
         root_layout.addLayout(bottom_layout)
 
+    def _setup_audio_system(self) -> None:
+        """Setup audio system for text reading"""
+        # Create AudioPlayer
+        self.audio_player = AudioPlayer()
+        
+        # Connect audio player signals
+        if self.audio_player:
+            self.audio_player.position_changed.connect(self._on_audio_position_changed)
+            self.audio_player.segment_changed.connect(self._on_audio_segment_changed)
+            self.audio_player.playback_state_changed.connect(self._on_audio_playback_state_changed)
+            self.audio_player.status_signal.connect(self._on_audio_status_changed)
+
     def _create_box_translate(self, content_layout: QVBoxLayout) -> None:
         """Create group box download video"""
         self.input_output_layout = QHBoxLayout()  # Make it an instance variable
@@ -155,7 +175,7 @@ class TranslateTab(UIToolbarTab):
         # Thêm nút đọc văn bản nguồn
         input_button_layout = QHBoxLayout()
         self.read_source_btn = QPushButton("🔊 Đọc văn bản nguồn")
-        # self.read_source_btn.clicked.connect(self._read_source_text)
+        self.read_source_btn.clicked.connect(self._read_source_text)
         self.read_source_btn.setObjectName("btn_style_1")
         input_button_layout.addWidget(self.read_source_btn)
 
@@ -177,6 +197,7 @@ class TranslateTab(UIToolbarTab):
         self.output_text.setReadOnly(True)
         input_button_layout_target = QHBoxLayout()
         self.read_target_btn = QPushButton("🔊 Đọc văn bản đích")
+        self.read_target_btn.clicked.connect(self._read_target_text)
         self.read_target_btn.setObjectName("btn_style_1")
         input_button_layout_target.addWidget(self.read_target_btn)
         input_button_layout_target.addStretch()
@@ -518,6 +539,126 @@ class TranslateTab(UIToolbarTab):
         worker.all_done.connect(lambda: self._add_log_item(f"✅ Hoàn thành file: {filename}"))
         worker.error.connect(lambda e: self._add_log_item(f"❌ Lỗi file {filename}: {e}"))
 
+    def _read_source_text(self) -> None:
+        """Đọc văn bản nguồn bằng TTS"""
+        text = self.input_text.toPlainText().strip()
+        if not text:
+            QMessageBox.information(self, "Thông báo", "Vui lòng nhập văn bản cần đọc.")
+            return
+        
+        self._start_tts_reading(text, "source")
+
+    def _read_target_text(self) -> None:
+        """Đọc văn bản đích bằng TTS"""
+        text = self.output_text.toPlainText().strip()
+        if not text:
+            QMessageBox.information(self, "Thông báo", "Vui lòng dịch văn bản trước khi đọc.")
+            return
+        
+        self._start_tts_reading(text, "target")
+
+    def _start_tts_reading(self, text: str, text_type: str) -> None:
+        """Bắt đầu đọc văn bản bằng TTS"""
+        try:
+            # Dừng audio đang phát nếu có
+            if self.audio_player:
+                self.audio_player.stop()
+            
+            # Dừng TTS worker cũ nếu đang chạy
+            if self.tts_worker and self.tts_worker.isRunning():
+                self.tts_worker.stop()
+                self.tts_worker.wait(3000)
+            
+            # Reset trạng thái các nút đọc
+            self._reset_read_buttons()
+            
+            # Cập nhật trạng thái nút đọc
+            if text_type == "source":
+                self.read_source_btn.setEnabled(False)
+                self.read_source_btn.setText("🔄 Đang xử lý...")
+            else:
+                self.read_target_btn.setEnabled(False)
+                self.read_target_btn.setText("🔄 Đang xử lý...")
+            
+            # Tạo TTS worker
+            self.tts_worker = MTProducerWorker(
+                text, "vi-VN-HoaiMyNeural", 0, 0, 500, 4
+            )
+            
+            # Kết nối signals
+            self.tts_worker.segment_ready.connect(self._on_tts_segment_ready)
+            self.tts_worker.progress.connect(self._on_tts_progress)
+            self.tts_worker.status.connect(self._on_tts_status)
+            self.tts_worker.all_done.connect(self._on_tts_complete)
+            self.tts_worker.error.connect(self._on_tts_error)
+            
+            # Bắt đầu TTS
+            self.tts_worker.start()
+            
+            # Log
+            self._add_log_item(f"🔊 Bắt đầu đọc văn bản {text_type}: {len(text)} ký tự", "info")
+            
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi bắt đầu TTS: {e}", "error")
+            self._reset_read_buttons()
+
+    def _on_tts_segment_ready(self, path: str, duration_ms: int, index: int) -> None:
+        """Callback khi TTS segment sẵn sàng"""
+        try:
+            # Thêm segment vào AudioPlayer
+            if self.audio_player:
+                self.audio_player.add_segments([path], [duration_ms])
+                
+                # Tự động phát nếu là segment đầu tiên
+                if index == 1:
+                    self.audio_player.play()
+                    self._add_log_item(f"▶️ Bắt đầu phát audio: {os.path.basename(path)}", "info")
+                    
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi xử lý TTS segment: {e}", "error")
+
+    def _on_tts_progress(self, emitted: int, total: int) -> None:
+        """Callback cho tiến trình TTS"""
+        progress = int((emitted / total) * 100) if total > 0 else 0
+        self._add_log_item(f"🔄 TTS: {progress}% ({emitted}/{total})", "info")
+
+    def _on_tts_status(self, msg: str) -> None:
+        """Callback cho status TTS"""
+        self._add_log_item(f"ℹ️ TTS: {msg}", "info")
+
+    def _on_tts_complete(self) -> None:
+        """Callback khi TTS hoàn thành"""
+        self._add_log_item("✅ TTS hoàn thành", "info")
+        self._reset_read_buttons()
+
+    def _on_tts_error(self, msg: str) -> None:
+        """Callback khi TTS có lỗi"""
+        self._add_log_item(f"❌ Lỗi TTS: {msg}", "error")
+        self._reset_read_buttons()
+
+    def _reset_read_buttons(self) -> None:
+        """Reset trạng thái các nút đọc"""
+        self.read_source_btn.setEnabled(True)
+        self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+        self.read_target_btn.setEnabled(True)
+        self.read_target_btn.setText("🔊 Đọc văn bản đích")
+
+    def _on_audio_position_changed(self, position_ms: int) -> None:
+        """Callback khi vị trí audio thay đổi"""
+        pass
+
+    def _on_audio_segment_changed(self, segment_index: int) -> None:
+        """Callback khi segment audio thay đổi"""
+        pass
+
+    def _on_audio_playback_state_changed(self, is_playing: bool) -> None:
+        """Callback khi trạng thái phát audio thay đổi"""
+        pass
+
+    def _on_audio_status_changed(self, status: str) -> None:
+        """Callback khi status audio thay đổi"""
+        self._add_log_item(f"🎵 Audio: {status}", "info")
+
     def stop_translation(self) -> None:
         """Dừng dịch thuật"""
         if self.worker and self.worker.isRunning():
@@ -702,6 +843,25 @@ class TranslateTab(UIToolbarTab):
             print(f"Warning: Error in closeEvent: {e}")
         
         super().closeEvent(event)
+
+    def _cleanup_temp_audio_files(self) -> None:
+        """Xóa các file audio tạm thời"""
+        try:
+            # Xóa file audio tạm từ TTS
+            from app.utils.helps import clean_all_temp_parts
+            clean_all_temp_parts()
+            
+            # Xóa file gap nếu có
+            from app.core.config import AppConfig
+            temp_dir = AppConfig.TEMP_DIR
+            if temp_dir.exists():
+                for temp_file in temp_dir.glob("gap_*.mp3"):
+                    try:
+                        temp_file.unlink()
+                    except Exception as e:
+                        print(f"Warning: Could not delete temp file {temp_file}: {e}")
+        except Exception as e:
+            print(f"Warning: Error cleaning temp files: {e}")
 
     
  

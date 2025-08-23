@@ -908,5 +908,57 @@
         "started_at": "2025-08-23T18:38:27.704655",
         "finished_at": "2025-08-23T18:38:27.704655",
         "status": "success"
+    },
+    {
+        "input_file": "Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 2,
+        "started_at": "2025-08-23T18:54:15.870328",
+        "finished_at": "2025-08-23T18:54:15.870328",
+        "status": "success"
+    },
+    {
+        "input_file": "Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 2,
+        "started_at": "2025-08-23T18:55:47.289652",
+        "finished_at": "2025-08-23T18:55:47.289652",
+        "status": "success"
+    },
+    {
+        "input_file": "Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 7,
+        "started_at": "2025-08-23T18:56:06.180863",
+        "finished_at": "2025-08-23T18:56:06.180863",
+        "status": "success"
+    },
+    {
+        "input_file": "Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.\nĐây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 7,
+        "started_at": "2025-08-23T18:56:29.297601",
+        "finished_at": "2025-08-23T18:56:29.297601",
+        "status": "success"
     }
 ]
