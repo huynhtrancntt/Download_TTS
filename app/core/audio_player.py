@@ -48,6 +48,8 @@ class AudioPlayer(QWidget):
     timeline_clicked = Signal(int)  # Timeline được click tại vị trí (ms)
     audio_split_requested = Signal(int, int)  # Yêu cầu cắt audio (segment_index, split_position_ms)
     status_signal = Signal(str)
+    playback_started = Signal()  # Signal khi bắt đầu phát từ 0:00
+    playback_stopped = Signal()  # Signal khi dừng phát
     def __init__(self, parent=None):
         super().__init__(parent)
         
@@ -95,8 +97,22 @@ class AudioPlayer(QWidget):
         self.slider = ClickSlider(Qt.Horizontal)
         self.slider.setRange(0, 0)
         
-        # Label thời gian
+        # Label thời gian - cải thiện hiển thị
         self.lbl_time = QLabel("00:00 / 00:00")
+        self.lbl_time.setStyleSheet("""
+            QLabel {
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+                background-color: #f0f0f0;
+                padding: 5px 10px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                min-width: 120px;
+                text-align: center;
+            }
+        """)
         
         # Checkbox lặp lại
         self.chk_loop = QCheckBox("🔁 Lặp lại")
@@ -130,32 +146,35 @@ class AudioPlayer(QWidget):
         self.player.setAudioOutput(self.audio_output)
 
     def _setup_timers_and_connections(self):
-        """Thiết lập timer và kết nối các tín hiệu"""
-        # Timer cập nhật timeline
-        self.timer = QTimer(self)
-        self.timer.setInterval(100)
+        """Thiết lập timer và kết nối tín hiệu"""
+        # Timer chính để cập nhật timeline
+        self.timer = QTimer()
         self.timer.timeout.connect(self.update_timeline)
+        self.timer.start(100)  # Cập nhật mỗi 100ms
         
-        # Timer cập nhật vị trí khi đang kéo slider
-        self.seek_update_timer = QTimer(self)
-        self.seek_update_timer.setInterval(50)  # Cập nhật nhanh hơn khi kéo
-        self.seek_update_timer.timeout.connect(self.update_seek_position)
-        
-        # Kết nối tín hiệu player
-        self.player.mediaStatusChanged.connect(self.on_media_status_changed)
-        self.player.errorOccurred.connect(self.on_media_error)
-        self.player.positionChanged.connect(self.on_player_position_changed)
-        self.player.playbackStateChanged.connect(self.on_playback_state_changed)
+        # Timer để kiểm tra chuyển segment
+        self.segment_check_timer = QTimer()
+        self.segment_check_timer.timeout.connect(self._check_segment_transition)
+        self.segment_check_timer.start(50)  # Kiểm tra mỗi 50ms
         
         # Timer debounce cho seek
-        self.seek_debounce = QTimer(self)
-        self.seek_debounce.setInterval(150)
+        self.seek_debounce = QTimer()
         self.seek_debounce.setSingleShot(True)
         self.seek_debounce.timeout.connect(self.apply_seek_target)
         
-        # Kết nối slider signals
+        # Timer cập nhật vị trí khi kéo slider
+        self.seek_update_timer = QTimer()
+        self.seek_update_timer.timeout.connect(self._update_position_during_seek)
+        
+        # Kết nối tín hiệu player
+        self.player.positionChanged.connect(self.on_player_position_changed)
+        self.player.durationChanged.connect(self.on_duration_changed)
+        self.player.playbackStateChanged.connect(self.on_playback_state_changed)
+        self.player.mediaStatusChanged.connect(self.on_media_status_changed)
+        self.player.errorOccurred.connect(self.on_media_error)
+        
+        # Kết nối tín hiệu slider
         self.slider.sliderPressed.connect(self.on_slider_pressed)
-        self.slider.sliderMoved.connect(self.on_slider_moved)
         self.slider.sliderReleased.connect(self.on_slider_released)
         self.slider.clickedValue.connect(self.on_slider_clicked)
         
@@ -232,34 +251,43 @@ class AudioPlayer(QWidget):
         self.status_signal.emit("Đã xóa tất cả segments")
 
     def play(self):
-        """Bắt đầu phát"""
-        if not self.segment_paths:
-            return
-        
-        if self.current_index < 0:
-            # Bắt đầu từ segment đầu tiên
-            self.play_segment(0, 0)
-        else:
-            # Tiếp tục phát
+        """Phát audio"""
+        if self.current_index >= 0 and self.segment_paths[self.current_index]:
             self.player.play()
             self.is_playing = True
             self.btn_playpause.setText("⏹")
             self.timer.start()
-
-    def stop(self):
-        """Dừng phát"""
-        self.player.stop()
-        self.timer.stop()
-        self.is_playing = False
-        self.btn_playpause.setText("▶️")
+            self.segment_check_timer.start()
+            
+            # Phát signal playback_started nếu bắt đầu từ 0:00
+            if self.get_global_position_ms() == 0:
+                self.playback_started.emit()
+        else:
+            # Nếu không có segment nào, phát segment đầu tiên
+            self.play_segment(0, 0)
 
     def pause(self):
-        """Tạm dừng"""
-        if self.is_playing:
-            self.player.pause()
-            self.timer.stop()
-            self.is_playing = False
-            self.btn_playpause.setText("▶️")
+        """Tạm dừng audio"""
+        self.player.pause()
+        self.is_playing = False
+        self.btn_playpause.setText("▶️")
+        self.timer.stop()
+        self.segment_check_timer.stop()
+
+    def stop(self):
+        """Dừng audio"""
+        self.player.stop()
+        self.is_playing = False
+        self.btn_playpause.setText("▶️")
+        self.timer.stop()
+        self.segment_check_timer.stop()
+        self.current_index = -1
+        # Reset vị trí slider về 0
+        self.slider.setValue(0)
+        self.update_time_label(0, self.total_known_ms)
+        
+        # Phát signal playback_stopped khi dừng phát
+        self.playback_stopped.emit()
 
     def seek_to(self, global_ms: int):
         """Seek đến vị trí cụ thể"""
@@ -349,8 +377,51 @@ class AudioPlayer(QWidget):
         return current_pos
 
     def update_time_label(self, cur_ms: int, total_ms: int):
-        """Cập nhật label hiển thị thời gian"""
-        self.lbl_time.setText(f"{ms_to_mmss(cur_ms)} / {ms_to_mmss(total_ms)}")
+        """Cập nhật label hiển thị thời gian với format rõ ràng hơn"""
+        current_time = ms_to_mmss(cur_ms)
+        total_time = ms_to_mmss(total_ms)
+        
+        # Hiển thị với format rõ ràng hơn
+        if total_ms > 0:
+            # Tính phần trăm đã phát
+            percentage = (cur_ms / total_ms) * 100
+            self.lbl_time.setText(f"{current_time} / {total_time} ({percentage:.1f}%)")
+        else:
+            self.lbl_time.setText(f"{current_time} / {total_time}")
+        
+        # Thay đổi màu sắc dựa trên trạng thái
+        if cur_ms > 0 and total_ms > 0:
+            # Màu xanh khi đang phát
+            self.lbl_time.setStyleSheet("""
+                QLabel {
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: #fff;
+                    background-color: #4CAF50;
+                    padding: 5px 10px;
+                    border: 1px solid #45a049;
+                    border-radius: 4px;
+                    min-width: 120px;
+                    text-align: center;
+                }
+            """)
+        else:
+            # Màu xám khi chưa phát
+            self.lbl_time.setStyleSheet("""
+                QLabel {
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    font-size: 14px;
+                    font-weight: bold;
+                    color: #333;
+                    background-color: #f0f0f0;
+                    padding: 5px 10px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    min-width: 120px;
+                    text-align: center;
+                }
+            """)
 
     def play_segment(self, idx: int, pos_in_segment_ms: int = 0):
         """Phát một segment cụ thể"""
@@ -372,8 +443,13 @@ class AudioPlayer(QWidget):
         self.player.setPosition(max(0, pos_in_segment_ms))
         self.player.play()
         self.timer.start()
+        self.segment_check_timer.start()
         self.is_playing = True
         self.btn_playpause.setText("⏹")
+        
+        # Phát signal playback_started nếu bắt đầu từ segment đầu tiên tại vị trí 0:00
+        if idx == 0 and pos_in_segment_ms == 0:
+            self.playback_started.emit()
         
         # Phát signal
         self.segment_changed.emit(idx)
@@ -392,11 +468,14 @@ class AudioPlayer(QWidget):
                 idx0 = next((k for k, p in enumerate(self.segment_paths) if p), None)
                 if idx0 is not None:
                     self.play_segment(idx0, 0)
+                    # Signal playback_started đã được phát trong play_segment nếu idx0 == 0
                     return
             
             # Không còn gì để phát
             self.is_playing = False
             self.btn_playpause.setText("▶️")
+            # Phát signal playback_stopped khi kết thúc phát
+            self.playback_stopped.emit()
 
     def play_prev(self):
         """Phát segment trước đó"""
@@ -682,6 +761,7 @@ class AudioPlayer(QWidget):
         # Cập nhật timer ngay khi thả slider
         if self.is_playing:
             self.timer.start()
+            self.segment_check_timer.start()
         
         # Khởi động lại audio nếu trước đó đang phát
         if self._was_playing_before_seek:
@@ -717,18 +797,29 @@ class AudioPlayer(QWidget):
     def on_media_status_changed(self, status):
         """Callback khi trạng thái media thay đổi"""
         if status == QMediaPlayer.EndOfMedia:
-            self.play_next()
+            # Không gọi play_next ngay lập tức
+            # Để timer _check_segment_transition xử lý việc chuyển segment
+            # dựa trên thời gian thực tế
+            pass
+
+
 
     def on_media_error(self, err):
         """Callback khi có lỗi media"""
         self.lbl_status.setText(f"⚠️ Lỗi phát: {self.player.errorString() or str(err)}")
         
-        self.play_next()
+        # Không gọi play_next ngay lập tức khi có lỗi
+        # Để timer _check_segment_transition xử lý việc chuyển segment
+        pass
 
     def on_player_position_changed(self, pos_ms: int):
         """Callback khi vị trí player thay đổi"""
         if not self.seeking:
             self.update_timeline()
+
+    def on_duration_changed(self, duration_ms: int):
+        """Callback khi thời lượng media thay đổi"""
+        self.duration_changed.emit(duration_ms)
 
     def on_playback_state_changed(self, state):
         """Callback khi trạng thái playback thay đổi"""
@@ -750,3 +841,42 @@ class AudioPlayer(QWidget):
         
         # Phát signal
         self.playback_state_changed.emit(self.is_playing)
+
+
+
+    def _check_segment_transition(self):
+        """Kiểm tra và xử lý chuyển segment dựa trên thời gian thực tế"""
+        if not self.is_playing or self.current_index < 0 or self.current_index >= len(self.segment_durations):
+            return
+            
+        current_segment_duration = self.segment_durations[self.current_index] or 0
+        if current_segment_duration <= 0:
+            return
+            
+        # Tính thời gian đã phát trong segment hiện tại
+        current_position = self.player.position()
+        
+        # Nếu đã phát hết thời gian thực tế của segment, chuyển sang segment tiếp theo
+        if current_position >= current_segment_duration:
+            # Kiểm tra xem có phải segment cuối cùng không
+            if self.current_index + 1 >= len(self.segment_paths):
+                # Nếu là segment cuối cùng và có loop, quay về đầu
+                if self._should_start_loop():
+                    idx0 = next((k for k, p in enumerate(self.segment_paths) if p), None)
+                    if idx0 is not None:
+                        self.play_segment(idx0, 0)
+                        return
+                
+                # Không có loop hoặc không đủ điều kiện, dừng phát
+                self.stop()
+                # Signal playback_stopped đã được phát trong stop()
+                return
+            else:
+                # Chuyển sang segment tiếp theo
+                self.play_next()
+
+    def _update_position_during_seek(self):
+        """Cập nhật vị trí khi đang kéo slider"""
+        if self._pending_seek_value is not None:
+            self.update_time_label(self._pending_seek_value, self.total_known_ms)
+            self.position_changed.emit(self._pending_seek_value)

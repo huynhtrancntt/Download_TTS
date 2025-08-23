@@ -1,12 +1,10 @@
-from signal import default_int_handler
 from PySide6.QtWidgets import (QApplication,
                                QWidget, QVBoxLayout, QPushButton, QHBoxLayout,
                                QLabel, QTextEdit, QComboBox, QSpinBox,
                                QMessageBox, QFileDialog, QCheckBox, QGroupBox, QLineEdit,
-                               QTableWidget, QTableWidgetItem, QHeaderView
+                               QTableWidget, QTableWidgetItem, QHeaderView, QListWidget
                                )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtCore import QThreadPool
+from PySide6.QtCore import Qt, QTimer, QThreadPool
 
 from app.uiToolbarTab import UIToolbarTab
 
@@ -26,6 +24,7 @@ from deep_translator import GoogleTranslator
 from app.workers.translate_workers import MultiThreadTranslateWorker, BatchTranslateWorker
 from app.core.audio_player import AudioPlayer
 from app.workers.TTS_workers import MTProducerWorker
+from app.core.segment_manager import SegmentManager
 
 
 LANGS = [
@@ -67,6 +66,7 @@ class TranslateTab(UIToolbarTab):
         super().__init__(parent_main)
         self._initialize_state_variables()
         self._setup_ui()
+        self._setup_history()
         # "Google Translate" #Google Gemini, OpenAI (ChatGPT)
         default_service = "Google Translate"
         self.service_combo.setCurrentText(default_service)
@@ -87,9 +87,13 @@ class TranslateTab(UIToolbarTab):
         self.audio_player: Optional[AudioPlayer] = None
         self.tts_worker: Optional[MTProducerWorker] = None
         self.is_playing_sequence = False
+        self.current_index: int = -1  # Thêm current_index
         
         # Log file
         self.log_file_path = "testtr.txt"
+
+        # Segment management
+        self.segment_manager = SegmentManager()
 
     def _setup_history(self) -> None:
         """Enable per-tab history with its own panel and button"""
@@ -135,7 +139,8 @@ class TranslateTab(UIToolbarTab):
         self._create_box_translate(content_layout)
         self._create_text_input_area(content_layout)
         
-
+        # Add segment manager UI
+        self._create_segment_manager_section(content_layout)
         
         root_layout.addLayout(content_layout)
 
@@ -157,6 +162,8 @@ class TranslateTab(UIToolbarTab):
             self.audio_player.segment_changed.connect(self._on_audio_segment_changed)
             self.audio_player.playback_state_changed.connect(self._on_audio_playback_state_changed)
             self.audio_player.status_signal.connect(self._on_audio_status_changed)
+        # Setup segment manager after audio player is created
+        self._setup_segment_manager()
 
     def _create_box_translate(self, content_layout: QVBoxLayout) -> None:
         """Create group box download video"""
@@ -369,6 +376,253 @@ class TranslateTab(UIToolbarTab):
         self.prompt_container.setLayout(self.prompt_layout)
 
         content_layout.addWidget(self.prompt_container)
+
+    def _create_segment_manager_section(self, content_layout: QVBoxLayout) -> None:
+        """Create segment manager UI section with timing display"""
+        # Create group box for segment manager
+        self.segment_manager_group = QGroupBox("🎵 Quản lý Audio Segments")
+        self.segment_manager_group.setFixedHeight(200)
+        self.segment_manager_layout = QVBoxLayout()
+        
+        # Header with timing information
+        header_layout = QHBoxLayout()
+        
+        # Total duration label
+        self.total_duration_label = QLabel("Tổng thời lượng: 00:00")
+        self.total_duration_label.setStyleSheet("font-weight: bold; font-size: 12px;")
+        header_layout.addWidget(self.total_duration_label)
+        
+        header_layout.addStretch()
+        
+        # Segment count label
+        self.segment_count_label = QLabel("Số segments: 0")
+        self.segment_count_label.setStyleSheet("font-size: 11px; color: #666;")
+        header_layout.addWidget(self.segment_count_label)
+        
+        self.segment_manager_layout.addLayout(header_layout)
+        
+        # Segment list widget
+        self.segment_list = QListWidget()
+        self.segment_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+        self.segment_list.itemClicked.connect(self._on_segment_list_item_clicked)
+        self.segment_list.itemDoubleClicked.connect(self._on_segment_list_item_double_clicked)
+        self.segment_manager_layout.addWidget(self.segment_list)
+        
+        # Control buttons for segments
+        segment_controls = QHBoxLayout()
+        
+        self.play_segments_btn = QPushButton("▶️ Phát tất cả")
+        self.play_segments_btn.clicked.connect(self._play_all_segments)
+        self.play_segments_btn.setObjectName("btn_style_1")
+        segment_controls.addWidget(self.play_segments_btn)
+        
+        self.stop_segments_btn = QPushButton("⏹️ Dừng")
+        self.stop_segments_btn.clicked.connect(self._stop_segments_playback)
+        self.stop_segments_btn.setObjectName("btn_style_2")
+        segment_controls.addWidget(self.stop_segments_btn)
+        
+        self.clear_segments_btn = QPushButton("🗑️ Xóa tất cả")
+        self.clear_segments_btn.clicked.connect(self._clear_all_segments)
+        self.clear_segments_btn.setObjectName("btn_style_2")
+        segment_controls.addWidget(self.clear_segments_btn)
+        
+        segment_controls.addStretch()
+        self.segment_manager_layout.addLayout(segment_controls)
+        
+        self.segment_manager_group.setLayout(self.segment_manager_layout)
+        content_layout.addWidget(self.segment_manager_group)
+
+    def _setup_segment_manager(self) -> None:
+        """Setup segment manager with UI components"""
+        try:
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                self.segment_manager.set_ui_components(self.segment_list, self.audio_player)
+                
+                # Connect segment manager signals
+                self.segment_manager.segments_changed.connect(self._update_segment_display)
+                self.segment_manager.segment_added.connect(self._on_segment_added)
+                self.segment_manager.segment_removed.connect(self._on_segment_removed)
+                
+                # Initial display update
+                self._update_segment_display()
+                
+        except Exception as e:
+            print(f"Error setting up segment manager: {e}")
+            self._add_log_item(f"❌ Lỗi khi thiết lập segment manager: {e}", "error")
+
+    def _on_segment_list_item_clicked(self, item) -> None:
+        """Handle single click on segment list item - play the selected segment"""
+        try:
+            # Get the row index
+            row = self.segment_list.row(item)
+            if row >= 0:
+                # Highlight the selected segment
+                self.segment_list.setCurrentRow(row)
+                
+                # Play the selected segment
+                if self.audio_player and hasattr(self, 'segment_manager') and self.segment_manager:
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    if row < len(valid_paths) and valid_paths[row]:
+                        # Stop current playback
+                        self.audio_player.stop()
+                        
+                        # Add all segments to audio player (để có thể chuyển segment)
+                        self.audio_player.add_segments(valid_paths, valid_durations)
+                        
+                        # Play from the selected segment
+                        self.audio_player.play_segment(row, 0)
+                        
+                        segment_name = os.path.basename(valid_paths[row])
+                        self._add_log_item(f"▶️ Phát segment {row + 1}: {segment_name}", "info")
+                        
+                print(f"Playing segment row: {row}")
+        except Exception as e:
+            print(f"Error handling segment click: {e}")
+            self._add_log_item(f"❌ Lỗi khi phát segment: {e}", "error")
+
+    def _on_segment_list_item_double_clicked(self, item) -> None:
+        """Handle double click on segment list item"""
+        try:
+            # Get the row index
+            row = self.segment_list.row(item)
+            if row >= 0:
+                # Could add functionality like playing specific segment
+                print(f"Double clicked segment row: {row}")
+                # Example: play specific segment
+                # if self.audio_player and hasattr(self, 'segment_manager'):
+                #     valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                #     if row < len(valid_paths):
+                #         self.audio_player.add_segments([valid_paths[row]], [valid_durations[row]])
+                #         self.audio_player.play()
+        except Exception as e:
+            print(f"Error handling segment double click: {e}")
+
+    def _on_segment_added(self, path: str, duration: int) -> None:
+        """Handle when a new segment is added"""
+        self._update_segment_display()
+        self._add_log_item(f"✅ Đã thêm segment: {os.path.basename(path)} ({duration}ms)", "info")
+
+    def _on_segment_removed(self, index: int) -> None:
+        """Handle when a segment is removed"""
+        self._update_segment_display()
+        self._add_log_item(f"🗑️ Đã xóa segment {index + 1}", "info")
+
+    def _update_segment_display(self) -> None:
+        """Update segment display information"""
+        try:
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                stats = self.segment_manager.get_segments_statistics()
+                
+                # Update segment count in the group box title
+                if hasattr(self, 'segment_manager_group'):
+                    self.segment_manager_group.setTitle(f"🎵 Quản lý Audio Segments ({stats['total_segments']} segments)")
+                
+                # Update timing labels
+                if stats['total_duration'] > 0:
+                    total_duration_str = f"{int(stats['total_duration'] / 1000 // 60):02d}:{int(stats['total_duration'] / 1000 % 60):02d}"
+                    self.total_duration_label.setText(f"Tổng thời lượng: {total_duration_str}")
+                else:
+                    self.total_duration_label.setText("Tổng thời lượng: 00:00")
+                
+                self.segment_count_label.setText(f"Số segments: {stats['total_segments']}")
+                
+        except Exception as e:
+            print(f"Error updating segment display: {e}")
+            # Fallback display
+            try:
+                if hasattr(self, 'total_duration_label'):
+                    self.total_duration_label.setText("Tổng thời lượng: 00:00")
+                if hasattr(self, 'segment_count_label'):
+                    self.segment_count_label.setText("Số segments: 0")
+                if hasattr(self, 'segment_manager_group'):
+                    self.segment_manager_group.setTitle("🎵 Quản lý Audio Segments (0 segments)")
+            except Exception as fallback_error:
+                print(f"Fallback display error: {fallback_error}")
+
+    def _add_segment_to_manager(self, text: str, segment_type: str = "text") -> None:
+        """Add a text segment to the segment manager"""
+        try:
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                # For text segments, we'll create a placeholder
+                # In a real implementation, you might want to create audio files
+                self.segment_manager.add_custom_row(
+                    f"Segment {len(self.segment_manager.segment_paths) + 1}",
+                    segment_type,
+                    f"{len(text)} chars"
+                )
+                self._update_segment_display()
+        except Exception as e:
+            print(f"Error adding segment to manager: {e}")
+
+    def _play_all_segments(self) -> None:
+        """Play all segments in sequence from the beginning"""
+        try:
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                
+                if not valid_paths:
+                    QMessageBox.information(self, "Thông báo", "Không có segments nào để phát.")
+                    return
+                
+                # Stop current playback
+                if self.audio_player:
+                    self.audio_player.stop()
+                
+                # Add all segments to audio player
+                self.audio_player.add_segments(valid_paths, valid_durations)
+                
+                # Start playback from the beginning (0:00)
+                self.audio_player.play()
+                
+                self._add_log_item(f"▶️ Bắt đầu phát {len(valid_paths)} segments từ đầu", "info")
+                
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi phát segments: {e}", "error")
+            print(f"Error in _play_all_segments: {e}")
+            # Fallback: try to play at least the first segment
+            try:
+                if self.audio_player and hasattr(self, 'segment_manager') and self.segment_manager:
+                    valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                    if valid_paths:
+                        self.audio_player.add_segments([valid_paths[0]], [valid_durations[0]])
+                        self.audio_player.play()
+                        self._add_log_item("▶️ Đã phát segment đầu tiên từ đầu (fallback)", "info")
+            except Exception as fallback_error:
+                print(f"Fallback error: {fallback_error}")
+
+    def _stop_segments_playback(self) -> None:
+        """Stop segments playback"""
+        try:
+            if self.audio_player:
+                self.audio_player.stop()
+            self._add_log_item("⏹️ Đã dừng phát segments", "info")
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi dừng segments: {e}", "error")
+
+    def _clear_all_segments(self) -> None:
+        """Clear all segments and stop audio playback"""
+        try:
+            reply = QMessageBox.question(
+                self, "Xác nhận xóa", 
+                "Bạn có chắc muốn xóa tất cả segments?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                # Dừng audio đang phát trước khi xóa
+                if self.audio_player:
+                    self.audio_player.stop()
+                    self._add_log_item("⏹️ Đã dừng phát audio", "info")
+                
+                # Xóa tất cả segments
+                if hasattr(self, 'segment_manager') and self.segment_manager:
+                    self.segment_manager.clear_segments()
+                
+                self._add_log_item("🗑️ Đã xóa tất cả segments", "info")
+                
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi xóa segments: {e}", "error")
 
     def _create_btn_downloadvideo(self, content_layout: QVBoxLayout) -> None:
         """Create button download video"""
@@ -601,21 +855,63 @@ class TranslateTab(UIToolbarTab):
         except Exception as e:
             self._add_log_item(f"❌ Lỗi khi bắt đầu TTS: {e}", "error")
             self._reset_read_buttons()
+    def _ensure_capacity(self, n: int) -> None:
+        """Ensure segments list has enough capacity"""
+        while len(self.segment_manager.segment_paths) < n:
+            self.segment_manager.segment_paths.append(None)
+            self.segment_manager.segment_durations.append(None)
+            
+    def _show_player_section(self, show: bool = True) -> None:
+        """Show or hide player section and segments list"""
+        # This method is a placeholder for translate_tab.py
+        # In translate_tab.py, we don't have a separate player section
+        # but we can use it to show/hide the segment manager section
+        if hasattr(self, 'segment_manager_group'):
+            self.segment_manager_group.setVisible(show)
+            
+    def _update_break_button_state(self, position_ms: int) -> None:
+        """Update break segment button state based on current audio position"""
+        # This method is a placeholder for translate_tab.py
+        # In translate_tab.py, we don't have break segment functionality
+        # but we can use it for future features
+        pass
 
     def _on_tts_segment_ready(self, path: str, duration_ms: int, index: int) -> None:
         """Callback khi TTS segment sẵn sàng"""
-        try:
-            # Thêm segment vào AudioPlayer
+        self._ensure_capacity(index)
+        self.segment_manager.segment_paths[index - 1] = path
+        self.segment_manager.segment_durations[index - 1] = duration_ms
+
+        # Update total duration
+        self.segment_manager._update_total_duration()
+
+        # Update segments display with detailed time information
+        # Use debounced update to reduce UI churn for large numbers of segments
+        if hasattr(self.segment_manager, 'schedule_display_update'):
+            self.segment_manager.schedule_display_update(200)
+        else:
+            self.segment_manager._update_display()
+
+        # Update AudioPlayer
+        if self.audio_player:
+            valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+            self.audio_player.add_segments(valid_paths, valid_durations)
+
+            # Hiện player section khi có segment đầu tiên
+            if index == 1:
+                self._show_player_section(True)
+
+            # Update break button state
+            if hasattr(self, '_update_break_button_state'):
+                current_pos = self.audio_player.get_current_position()
+                self._update_break_button_state(current_pos)
+
+        # Auto-play first segment if nothing is playing
+        if self.current_index < 0 and self.segment_manager.segment_paths and self.segment_manager.segment_paths[0]:
             if self.audio_player:
-                self.audio_player.add_segments([path], [duration_ms])
-                
-                # Tự động phát nếu là segment đầu tiên
-                if index == 1:
-                    self.audio_player.play()
-                    self._add_log_item(f"▶️ Bắt đầu phát audio: {os.path.basename(path)}", "info")
-                    
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi xử lý TTS segment: {e}", "error")
+                self.audio_player.play()
+                self._add_log_item(
+                    f"▶️ Tự động phát segment đầu tiên: {os.path.basename(self.segment_manager.segment_paths[0])}", "blue")
 
     def _on_tts_progress(self, emitted: int, total: int) -> None:
         """Callback cho tiến trình TTS"""
@@ -645,15 +941,32 @@ class TranslateTab(UIToolbarTab):
 
     def _on_audio_position_changed(self, position_ms: int) -> None:
         """Callback khi vị trí audio thay đổi"""
-        pass
+        try:
+            # Có thể thêm logic để cập nhật UI theo vị trí audio
+            # Ví dụ: cập nhật progress bar, timeline, etc.
+            pass
+        except Exception as e:
+            print(f"Error handling audio position change: {e}")
 
     def _on_audio_segment_changed(self, segment_index: int) -> None:
         """Callback khi segment audio thay đổi"""
-        pass
+        try:
+            # Highlight current segment in the list
+            if hasattr(self, 'segment_list') and self.segment_list and 0 <= segment_index < self.segment_list.count():
+                self.segment_list.setCurrentRow(segment_index)
+        except Exception as e:
+            print(f"Error highlighting segment: {e}")
 
     def _on_audio_playback_state_changed(self, is_playing: bool) -> None:
         """Callback khi trạng thái phát audio thay đổi"""
-        pass
+        try:
+            # Update button states
+            # if hasattr(self, 'play_segments_btn'):
+            #     self.play_segments_btn.setEnabled(not is_playing)  # Enable khi KHÔNG phát
+            if hasattr(self, 'stop_segments_btn'):
+                self.stop_segments_btn.setEnabled(is_playing)      # Enable khi ĐANG phát
+        except Exception as e:
+            print(f"Error updating button states: {e}")
 
     def _on_audio_status_changed(self, status: str) -> None:
         """Callback khi status audio thay đổi"""
@@ -839,6 +1152,10 @@ class TranslateTab(UIToolbarTab):
             # Xóa file audio tạm trước khi đóng
             self._cleanup_temp_audio_files()
                 
+            # Clear segment manager
+            if hasattr(self, 'segment_manager'):
+                self.segment_manager.clear_segments()
+                
         except Exception as e:
             print(f"Warning: Error in closeEvent: {e}")
         
@@ -877,3 +1194,13 @@ class TranslateTab(UIToolbarTab):
                 
         except Exception as e:
             print(f"❌ Lỗi khi ghi log vào file: {str(e)}")
+    def _on_playback_started(self):
+        """Callback khi bắt đầu phát từ 0:00"""
+        print("Playback started from 0:00")
+        btn
+        # Thêm logic xử lý khi bắt đầu phát
+
+    def _on_playback_stopped(self):
+        """Callback khi dừng phát"""
+        print("Playback stopped")
+        # Thêm logic xử lý khi dừng phát
