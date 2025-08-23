@@ -25,10 +25,6 @@ from deep_translator import GoogleTranslator
 
 from app.workers.translate_workers import MultiThreadTranslateWorker, BatchTranslateWorker
 
-from app.core.audio_player import AudioPlayer
-from app.workers.translate_workers import TranslateTTSWorker
-from app.utils.helps import split_text, group_by_char_limit_with_len
-
 
 LANGS = [
     ("Tự phát hiện", "auto"),
@@ -68,14 +64,11 @@ class TranslateTab(UIToolbarTab):
     def __init__(self, parent_main: QWidget) -> None:
         super().__init__(parent_main)
         self._initialize_state_variables()
-       # self._setup_history()
         self._setup_ui()
         # "Google Translate" #Google Gemini, OpenAI (ChatGPT)
         default_service = "Google Translate"
         self.service_combo.setCurrentText(default_service)
         self._on_service_changed(default_service)
-        
-        # Xóa dòng này: QTimer.singleShot(100, self.load_voices_for_languages)
 
     def _initialize_state_variables(self) -> None:
         # Thêm worker và các biến trạng thái
@@ -88,22 +81,7 @@ class TranslateTab(UIToolbarTab):
         self.thread_pool = QThreadPool()
         self.thread_pool.setMaxThreadCount(10)  # Tối đa 10 thread
         
-        # TTS worker cho audio
-        self.tts_worker: Optional[TranslateTTSWorker] = None
-        
-        # Audio player
-        self.audio_player: Optional[AudioPlayer] = None
-        
-        # Audio settings
-        self.auto_play_audio = True  # Tự động phát audio khi hoàn thành
-        self.audio_segments: List[str] = []  # Danh sách đường dẫn audio
-        self.audio_durations: List[int] = []  # Danh sách thời lượng audio
-        
-        # Biến cho việc đọc tuần tự
-        self.current_chunks: List[str] = []
-        self.current_chunk_index: int = 0
-        self.current_lang_code: str = ""
-        self.current_text_type: str = ""
+
         
         # Log file
         self.log_file_path = "testtr.txt"
@@ -149,8 +127,7 @@ class TranslateTab(UIToolbarTab):
         self._create_box_translate(content_layout)
         self._create_text_input_area(content_layout)
         
-        # Thêm danh sách file audio
-        self._create_audio_list_section(content_layout)
+
         
         root_layout.addLayout(content_layout)
 
@@ -175,13 +152,17 @@ class TranslateTab(UIToolbarTab):
         self.input_text.setMinimumHeight(200)
         self.input_text.setPlaceholderText("Nhập văn bản cần dịch vào đây...")
         
-        # Auto read button for input text
-        self.btn_read_source = QPushButton("🔊 Đọc văn bản nguồn")
-        self.btn_read_source.clicked.connect(self._read_source_text)
-        self.btn_read_source.setObjectName("btn_style_1")
+        # Thêm nút đọc văn bản nguồn
+        input_button_layout = QHBoxLayout()
+        self.read_source_btn = QPushButton("🔊 Đọc văn bản nguồn")
+        # self.read_source_btn.clicked.connect(self._read_source_text)
+        self.read_source_btn.setObjectName("btn_style_1")
+        input_button_layout.addWidget(self.read_source_btn)
+
+        input_button_layout.addStretch()
         
         input_layout.addWidget(self.input_text)
-        input_layout.addWidget(self.btn_read_source)
+        input_layout.addLayout(input_button_layout)
         input_container.setLayout(input_layout)
         
         # Output text area with auto read button
@@ -194,14 +175,13 @@ class TranslateTab(UIToolbarTab):
         self.output_text.setMinimumHeight(200)
         self.output_text.setPlaceholderText("Kết quả dịch sẽ hiển thị ở đây...")
         self.output_text.setReadOnly(True)
-        
-        # Auto read button for output text
-        self.btn_read_target = QPushButton("🔊 Đọc văn bản đích")
-        self.btn_read_target.clicked.connect(self._read_target_text)
-        self.btn_read_target.setObjectName("btn_style_1")
-        
+        input_button_layout_target = QHBoxLayout()
+        self.read_target_btn = QPushButton("🔊 Đọc văn bản đích")
+        self.read_target_btn.setObjectName("btn_style_1")
+        input_button_layout_target.addWidget(self.read_target_btn)
+        input_button_layout_target.addStretch()
         output_layout.addWidget(self.output_text)
-        output_layout.addWidget(self.btn_read_target)
+        output_layout.addLayout(input_button_layout_target)
         output_container.setLayout(output_layout)
         
         # Add to layout
@@ -547,11 +527,25 @@ class TranslateTab(UIToolbarTab):
         
         # Dừng phát audio nếu đang phát
         if hasattr(self, 'audio_player') and self.audio_player:
-            self.audio_player.stop()
+            try:
+                self.audio_player.stop()
+            except:
+                pass
         
         # Dừng phát tuần tự
         if hasattr(self, 'is_playing_sequence'):
             self.is_playing_sequence = False
+        
+        # Dừng TTS worker nếu đang chạy
+        if hasattr(self, 'tts_worker') and self.tts_worker and self.tts_worker.isRunning():
+            try:
+                self.tts_worker.stop()
+                self.tts_worker.wait(3000)
+            except:
+                pass
+        
+        # Reset trạng thái các nút đọc
+        self._reset_read_buttons()
         
         self.stop_button.setEnabled(False)
         self._add_log_item("⏹ Đã dừng dịch thuật")
@@ -652,35 +646,14 @@ class TranslateTab(UIToolbarTab):
         except Exception as e:
             print(f"[TTS PROGRESS ERROR] {e}")
 
-    # def stop_all(self) -> None:
-    #     """Stop all processes"""
-    #     # Stop TTS worker
-    #     if getattr(self, "worker", None) and self.worker.isRunning():
-    #         try:
-    #             self.worker.stop()
-    #             # Wait for worker to stop completely
-    #             if self.worker.wait(3000):  # Wait max 3 seconds
-    #                 pass
-    #             else:
-    #                 self.worker.terminate()
-    #                 self.worker.wait(1000)
-
-    #             # Reset worker reference
-    #             self.worker = None
-    #         except Exception as e:
-    #             print(f"Warning: Error stopping worker in stop_all: {e}")
-    #             # Force cleanup
-    #             try:
-    #                 if self.worker:
-    #                     self.worker.terminate()
-    #                     self.worker.wait(1000)
-    #                     self.worker = None
-    #             except:
-    #                 pass
 
     def closeEvent(self, event):
         """Handle tab close event - cleanup threads properly"""
         try:
+            # Dừng phát audio nếu đang phát
+            if hasattr(self, 'is_playing_sequence') and self.is_playing_sequence:
+                self.is_playing_sequence = False
+            
             # Stop all workers
             if hasattr(self, 'worker') and self.worker and self.worker.isRunning():
                 self.worker.stop()
@@ -717,7 +690,10 @@ class TranslateTab(UIToolbarTab):
                 
             # Dừng audio player nếu đang phát
             if hasattr(self, 'audio_player') and self.audio_player:
-                self.audio_player.stop()
+                try:
+                    self.audio_player.stop()
+                except:
+                    pass
                 
             # Xóa file audio tạm trước khi đóng
             self._cleanup_temp_audio_files()
@@ -727,205 +703,8 @@ class TranslateTab(UIToolbarTab):
         
         super().closeEvent(event)
 
-    def get_thread_status(self) -> Dict[str, bool]:
-        """Get status of all running threads"""
-        status = {
-            'main_worker': False,
-            'batch_worker': False,
-            'voice_loader': False
-        }
-        
-        if hasattr(self, 'worker') and self.worker:
-            status['main_worker'] = self.worker.isRunning()
-            
-        if hasattr(self, 'batch_worker') and self.batch_worker:
-            status['batch_worker'] = self.batch_worker.isRunning()
-            
-        if hasattr(self, 'voice_loader') and self.voice_loader:
-            status['voice_loader'] = self.voice_loader.isRunning()
-            
-        return status
     
-    def is_any_thread_running(self) -> bool:
-        """Check if any thread is currently running"""
-        status = self.get_thread_status()
-        return any(status.values())
-
-    def _update_tts_progress(self, completed: int, total: int) -> None:
-        """Cập nhật tiến trình tạo audio"""
-        if completed == total:
-            self.create_audio_btn.setEnabled(True)
-            self.create_audio_btn.setText("🎵 Tạo Audio cho tất cả")
-            self._add_log_item(f"✅ Hoàn thành tạo audio cho {total} đoạn văn bản!")
-
-    def _clear_audio(self) -> None:
-        """Xóa tất cả audio"""
-        if self.audio_player:
-            self.audio_player.clear_segments()
-        
-        # Reset danh sách audio
-        self.audio_segments.clear()
-        self.audio_durations.clear()
-        
-        # Cập nhật danh sách
-        self._update_audio_list()
-        
-        # Dừng TTS worker nếu đang chạy
-        if self.tts_worker and self.tts_worker.isRunning():
-            self.tts_worker.stop()
-            self.tts_worker.wait(3000)
-            self.tts_worker = None
-            
-        # Xóa các file audio tạm
-        self._cleanup_temp_audio_files()
-        
-        self._add_log_item("🗑️ Đã xóa tất cả audio")
-
-    def _cleanup_temp_audio_files(self) -> None:
-        pass
-        """Xóa các file audio tạm"""
-        # try:
-        #     for audio_path in self.audio_segments:
-        #         if audio_path and os.path.exists(audio_path):
-        #             try:
-        #                 os.remove(audio_path)
-        #                 self._write_log_to_file(f"️ Đã xóa file audio: {audio_path}")
-        #             except Exception as e:
-        #                 self._write_log_to_file(f"⚠️ Không thể xóa file: {audio_path}, lỗi: {str(e)}")
-        # except Exception as e:
-        #     self._write_log_to_file(f"⚠️ Lỗi khi xóa file audio: {str(e)}")
-
-    def _on_auto_play_toggled(self, checked: bool) -> None:
-        """Xử lý khi checkbox auto play thay đổi"""
-        self.auto_play_audio = checked
-        if checked:
-            self._add_log_item("🎵 Đã bật tự động phát audio")
-        else:
-            self._add_log_item("🔇 Đã tắt tự động phát audio")
-    def _reset_read_buttons(self) -> None:
-        """Reset trạng thái các nút đọc"""
-        self.btn_read_source.setEnabled(True)
-        self.btn_read_source.setText("🔊 Đọc văn bản nguồn")
-        self.btn_read_target.setEnabled(True)
-        self.btn_read_target.setText("🔊 Đọc văn bản đích")
-        
-        # Đánh dấu không còn phát audio
-        if hasattr(self, 'is_playing_audio'):
-            self.is_playing_audio = False
-            
-        # Đánh dấu không còn phát tuần tự
-        if hasattr(self, 'is_playing_sequence'):
-            self.is_playing_sequence = False
-
-    def _read_source_text(self) -> None:
-        """Đọc văn bản nguồn bằng TTS"""
-        text = self.input_text.toPlainText().strip()
-        if not text:
-            QMessageBox.information(self, "Thông báo", "Vui lòng nhập văn bản cần đọc.")
-            return
-        
-        # Lấy ngôn ngữ nguồn
-        source_lang = self.source_lang_combo.currentText()
-        
-        # Nếu là "Tự phát hiện", tự động phát hiện ngôn ngữ
-        if source_lang == "Tự phát hiện":
-            try:
-                detected_lang = detect(text)
-                self._add_log_item(f"🔍 Đã phát hiện ngôn ngữ: {detected_lang}")
-                tts_lang_code = self._convert_lang_code_for_tts(detected_lang)
-            except Exception as e:
-                self._add_log_item(f"❌ Không thể phát hiện ngôn ngữ: {str(e)}")
-                tts_lang_code = "vi"
-        else:
-            tts_lang_code = code_by_name(source_lang)
-        
-        # Chia nhỏ văn bản và đọc từng phần
-        self._read_text_in_chunks(text, tts_lang_code, "source")
-
-    def _read_target_text(self) -> None:
-        """Đọc văn bản đích bằng TTS"""
-        text = self.output_text.toPlainText().strip()
-        if not text:
-            QMessageBox.information(self, "Thông báo", "Vui lòng dịch văn bản trước khi đọc.")
-            return
-        
-        # Lấy ngôn ngữ đích
-        target_lang = self.target_lang_combo.currentText()
-        
-        # Nếu là "Tự phát hiện", tự động phát hiện ngôn ngữ
-        if target_lang == "Tự phát hiện":
-            try:
-                detected_lang = detect(text)
-                self._add_log_item(f"🔍 Đã phát hiện ngôn ngữ: {detected_lang}")
-                tts_lang_code = self._convert_lang_code_for_tts(detected_lang)
-            except Exception as e:
-                self._add_log_item(f"❌ Không thể phát hiện ngôn ngữ: {str(e)}")
-                tts_lang_code = "en"
-        else:
-            tts_lang_code = code_by_name(target_lang)
-        
-        # Chia nhỏ văn bản và đọc từng phần
-        self._read_text_in_chunks(text, tts_lang_code, "target")
-
-    def _read_text_in_chunks(self, text: str, lang_code: str, text_type: str) -> None:
-        """Chia nhỏ văn bản và đọc từng phần"""
-        try:
-            # Sử dụng hàm split_text có sẵn để chia văn bản
-            chunks = split_text(text, max_len=300)
-            
-            if len(chunks) == 1:
-                # Nếu chỉ có 1 đoạn, đọc trực tiếp
-                self._create_and_play_tts_chunk(chunks[0], lang_code, text_type, 0, 1)
-            else:
-                # Nếu có nhiều đoạn, đọc tuần tự
-                self._read_chunks_sequentially(chunks, lang_code, text_type)
-                
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi chia văn bản: {str(e)}")
-    def _create_and_play_tts_chunk(self, text: str, lang_code: str, text_type: str, 
-                                   chunk_index: int, total_chunks: int) -> None:
-        """Tạo và phát TTS cho một đoạn văn bản"""
-        try:
-            # Dừng TTS worker cũ nếu đang chạy
-            if self.tts_worker and self.tts_worker.isRunning():
-                self.tts_worker.stop()
-                self.tts_worker.wait(3000)
-            
-            # Tạo TTS worker mới với một đoạn văn bản
-            segments = [(text, text, chunk_index)]  # (original, translated, index)
-            self.tts_worker = TranslateTTSWorker(segments, lang_code)
-            
-            # Kết nối signals
-            self.tts_worker.audio_ready.connect(self._on_chunk_audio_ready)
-            self.tts_worker.tts_error.connect(self._on_tts_error)
-            self.tts_worker.tts_status.connect(self._add_log_item)
-            
-            # Bắt đầu TTS
-            self.tts_worker.start()
-            
-            # Cập nhật UI
-            if text_type == "source":
-                self.btn_read_source.setEnabled(False)
-                self.btn_read_source.setText(f"🔄 Đang tạo đoạn {chunk_index + 1}/{total_chunks}...")
-            else:
-                self.btn_read_target.setEnabled(False)
-                self.btn_read_target.setText(f"🔄 Đang tạo đoạn {chunk_index + 1}/{total_chunks}...")
-                
-            self._add_log_item(f" Đang tạo audio cho đoạn {chunk_index + 1}/{total_chunks}...")
-            
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi tạo TTS: {str(e)}")
-            self._reset_read_buttons()
-
-    def _read_chunks_sequentially(self, chunks: List[str], lang_code: str, text_type: str) -> None:
-        """Đọc các đoạn văn bản tuần tự"""
-        self.current_chunks = chunks
-        self.current_chunk_index = 0
-        self.current_lang_code = lang_code
-        self.current_text_type = text_type
-        
-        # Tạo tất cả audio trước, sau đó phát tuần tự
-        self._create_all_audio_chunks()
+ 
 
     def _write_log_to_file(self, message: str) -> None:
         """Ghi log vào file testtr.txt"""
@@ -938,515 +717,3 @@ class TranslateTab(UIToolbarTab):
                 
         except Exception as e:
             print(f"❌ Lỗi khi ghi log vào file: {str(e)}")
-
-    def _create_all_audio_chunks(self) -> None:
-        """Tạo tất cả audio chunks song song"""
-        try:
-            # Reset danh sách audio trước khi tạo mới
-            self.audio_segments.clear()
-            self.audio_durations.clear()
-            
-            # Ghi log bắt đầu
-            self._write_log_to_file(f"🎵 Bắt đầu tạo {len(self.current_chunks)} đoạn audio cho {self.current_text_type}")
-            self._write_log_to_file(f"   Ngôn ngữ: {self.current_lang_code}")
-            
-            # Ghi log từng đoạn text
-            for i, chunk in enumerate(self.current_chunks):
-                self._write_log_to_file(f"   Đoạn {i+1}: {chunk}")
-            
-            # Cập nhật UI
-            if self.current_text_type == "source":
-                self.btn_read_source.setEnabled(False)
-                self.btn_read_source.setText(f" Đang tạo {len(self.current_chunks)} đoạn audio...")
-            else:
-                self.btn_read_target.setEnabled(False)
-                self.btn_read_target.setText(f" Đang tạo {len(self.current_chunks)} đoạn audio...")
-            
-            self._add_log_item(f"🎵 Bắt đầu tạo {len(self.current_chunks)} đoạn audio...")
-            
-            # Tạo TTS worker cho tất cả chunks
-            segments = []
-            for i, chunk in enumerate(self.current_chunks):
-                segments.append((chunk, chunk, i))
-            
-            # Dừng TTS worker cũ nếu đang chạy
-            if self.tts_worker and self.tts_worker.isRunning():
-                self.tts_worker.stop()
-                self.tts_worker.wait(3000)
-            
-            # Tạo TTS worker mới cho tất cả segments
-            self.tts_worker = TranslateTTSWorker(segments, self.current_lang_code)
-            
-            # Kết nối signals
-            self.tts_worker.audio_ready.connect(self._on_chunk_audio_ready)
-            self.tts_worker.tts_error.connect(self._on_tts_error)
-            self.tts_worker.tts_status.connect(self._add_log_item)
-            
-            # Bắt đầu TTS
-            self.tts_worker.start()
-            
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi tạo audio: {str(e)}"
-            self._add_log_item(error_msg)
-            self._write_log_to_file(error_msg)
-            self._reset_read_buttons()
-
-    def _on_chunk_audio_ready(self, audio_path: str, duration_ms: int, index: int) -> None:
-        """Xử lý khi audio TTS sẵn sàng cho một đoạn"""
-        try:
-            # Khởi tạo audio player nếu chưa có
-            if not self.audio_player:
-                self.audio_player = AudioPlayer()
-            
-            # Kiểm tra xem audio này đã tồn tại chưa
-            if index < len(self.audio_segments) and self.audio_segments[index]:
-                self._add_log_item(f"⚠️ Đoạn {index + 1} đã tồn tại, bỏ qua")
-                self._write_log_to_file(f"⚠️ Đoạn {index + 1} đã tồn tại, bỏ qua")
-                return
-            
-            # Kiểm tra file audio có tồn tại không và có kích thước > 0
-            if not os.path.exists(audio_path):
-                error_msg = f"❌ File audio không tồn tại: {audio_path}"
-                self._add_log_item(error_msg)
-                self._write_log_to_file(error_msg)
-                return
-            
-            # Kiểm tra file size
-            file_size = os.path.getsize(audio_path)
-            if file_size == 0:
-                error_msg = f"❌ File audio rỗng (0 bytes): {audio_path}"
-                self._add_log_item(error_msg)
-                self._write_log_to_file(error_msg)
-                return
-            
-            # Thêm audio vào danh sách theo đúng thứ tự
-            while len(self.audio_segments) <= index:
-                self.audio_segments.append("")
-                self.audio_durations.append(0)
-            
-            self.audio_segments[index] = audio_path
-            self.audio_durations[index] = duration_ms
-            
-            # Lấy text của đoạn này
-            current_text = self.current_chunks[index] if index < len(self.current_chunks) else "Unknown"
-            
-            # Ghi log vào file
-            self._write_log_to_file(f"✅ Đã tạo xong đoạn {index + 1}/{len(self.current_chunks)}")
-            self._write_log_to_file(f"   Text: {current_text}")
-            self._write_log_to_file(f"   Audio path: {audio_path}")
-            self._write_log_to_file(f"   Duration: {duration_ms}ms")
-            self._write_log_to_file(f"   File size: {file_size} bytes")
-            
-            self._add_log_item(f"✅ Đã tạo xong đoạn {index + 1}/{len(self.current_chunks)}")
-            
-            # Cập nhật danh sách audio
-            self._update_audio_list()
-            
-            # Kiểm tra xem đã tạo xong tất cả chưa
-            completed_count = len([p for p in self.audio_segments if p])
-            if completed_count == len(self.current_chunks):
-                # Đã tạo xong tất cả, bắt đầu phát
-                self._add_log_item(f" Đã tạo xong tất cả {completed_count} đoạn, bắt đầu phát!")
-                self._write_log_to_file(f" Đã tạo xong tất cả {completed_count} đoạn, bắt đầu phát!")
-                self._start_playing_all_chunks()
-            
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi xử lý audio: {str(e)}"
-            self._add_log_item(error_msg)
-            self._write_log_to_file(error_msg)
-
-    def _start_playing_all_chunks(self) -> None:
-        """Bắt đầu phát tất cả chunks tuần tự"""
-        try:
-            # Cập nhật audio player với tất cả segments
-            self.audio_player.add_segments(self.audio_segments, self.audio_durations)
-            
-            # Đảm bảo volume đủ lớn
-            if hasattr(self.audio_player, 'audio_output'):
-                self.audio_player.audio_output.setVolume(0.8)  # Set volume 80%
-                self.audio_player.audio_output.setMuted(False)  # Đảm bảo không bị mute
-            
-            # Ngắt kết nối signal cũ nếu có
-            try:
-                if hasattr(self.audio_player, 'playback_state_changed'):
-                    self.audio_player.playback_state_changed.disconnect()
-                if hasattr(self.audio_player, 'segment_changed'):
-                    self.audio_player.segment_changed.disconnect()
-            except:
-                pass
-            
-            # Kết nối signal để theo dõi segment thay đổi
-            if hasattr(self.audio_player, 'segment_changed'):
-                self.audio_player.segment_changed.connect(self._on_segment_changed)
-            
-            # Kết nối signal để biết khi nào audio dừng hoàn toàn
-            if hasattr(self.audio_player, 'playback_state_changed'):
-                self.audio_player.playback_state_changed.connect(self._on_playback_state_changed)
-            
-            # Bắt đầu phát từ đoạn đầu tiên
-            self.current_play_index = 0
-            self.is_playing_sequence = True  # Flag để kiểm soát việc phát tuần tự
-            
-            # Cập nhật UI
-            if self.current_text_type == "source":
-                self.btn_read_source.setText("🎵 Đang phát...")
-            else:
-                self.btn_read_target.setText("🎵 Đang phát...")
-                
-            self._add_log_item("🎵 Bắt đầu phát tất cả đoạn audio!")
-            self._write_log_to_file("🎵 Bắt đầu phát tất cả đoạn audio!")
-            
-            # Bắt đầu phát từ đoạn đầu tiên
-            self._play_current_chunk()
-            
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi bắt đầu phát: {str(e)}")
-            self._write_log_to_file(f"❌ Lỗi khi bắt đầu phát: {str(e)}")
-            self._reset_read_buttons()
-
-    def _play_current_chunk(self) -> None:
-        """Phát đoạn audio hiện tại"""
-        # Kiểm tra xem có đang phát tuần tự không
-        if not hasattr(self, 'is_playing_sequence') or not self.is_playing_sequence:
-            return
-            
-        if self.current_play_index >= len(self.audio_segments):
-            # Đã phát xong tất cả
-            self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
-            self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
-            self.is_playing_sequence = False
-            self._reset_read_buttons()
-            return
-        
-        try:
-            # Hiển thị text đang được đọc
-            current_text = self.current_chunks[self.current_play_index]
-            print(f"current_text: {current_text}")
-            
-            # Ghi log vào file
-            self._write_log_to_file(f"🔊 Đang đọc đoạn {self.current_play_index + 1}/{len(self.current_chunks)}: {current_text}")
-            
-            self._add_log_item(f"🔊 Đang đọc đoạn {self.current_play_index + 1}/{len(self.current_chunks)}: {current_text[:100]}{'...' if len(current_text) > 100 else ''}")
-            
-            # Kiểm tra file audio có tồn tại không
-            audio_path = self.audio_segments[self.current_play_index]
-            if not audio_path or not os.path.exists(audio_path):
-                self._add_log_item(f"❌ File audio không tồn tại: {audio_path}")
-                self._write_log_to_file(f"❌ File audio không tồn tại: {audio_path}")
-                # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
-                self.current_play_index += 1
-                QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
-                return
-            
-            # Kiểm tra file size
-            file_size = os.path.getsize(audio_path)
-            if file_size == 0:
-                self._add_log_item(f"❌ File audio rỗng: {audio_path}")
-                self._write_log_to_file(f"❌ File audio rỗng: {audio_path}")
-                # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
-                self.current_play_index += 1
-                QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
-                return
-            
-            # Dừng audio hiện tại nếu đang phát
-            if self.audio_player and hasattr(self.audio_player, 'stop'):
-                self.audio_player.stop()
-            
-            # Phát đoạn hiện tại
-            self.audio_player.play_segment(self.current_play_index)
-            
-            # Ghi log thông tin phát
-            self._write_log_to_file(f"   Phát file: {audio_path}")
-            self._write_log_to_file(f"   File size: {file_size} bytes")
-            
-            # KHÔNG dùng QTimer ở đây - để AudioPlayer tự động chuyển segment
-            
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi phát đoạn {self.current_play_index + 1}: {str(e)}"
-            self._add_log_item(error_msg)
-            self._write_log_to_file(error_msg)
-            # Bỏ qua đoạn này và chuyển sang đoạn tiếp theo
-            self.current_play_index += 1
-            QTimer.singleShot(100, self._play_current_chunk)  # Delay nhỏ để tránh vòng lặp vô hạn
-
-    def _on_segment_changed(self, segment_index: int) -> None:
-        """Xử lý khi segment thay đổi trong AudioPlayer"""
-        try:
-            if not hasattr(self, 'is_playing_sequence') or not self.is_playing_sequence:
-                return
-                
-            # Cập nhật index hiện tại
-            self.current_play_index = segment_index
-            
-            # Ghi log
-            if segment_index < len(self.current_chunks):
-                current_text = self.current_chunks[segment_index]
-                self._add_log_item(f" Chuyển sang đoạn {segment_index + 1}/{len(self.current_chunks)}")
-                self._write_log_to_file(f" Chuyển sang đoạn {segment_index + 1}/{len(self.current_chunks)}: {current_text[:100]}{'...' if len(current_text) > 100 else ''}")
-            
-            # Kiểm tra xem đã phát xong tất cả chưa
-            if segment_index >= len(self.audio_segments) - 1:
-                # Đã phát xong tất cả
-                self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
-                self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
-                self.is_playing_sequence = False
-                self._reset_read_buttons()
-                
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi xử lý segment thay đổi: {str(e)}"
-            self._add_log_item(error_msg)
-            self._write_log_to_file(error_msg)
-
-    def _on_playback_state_changed(self, is_playing: bool) -> None:
-        """Xử lý khi trạng thái phát audio thay đổi"""
-        try:
-            # Chỉ xử lý khi đang phát tuần tự và audio dừng hoàn toàn
-            if hasattr(self, 'is_playing_sequence') and self.is_playing_sequence and not is_playing:
-                # Kiểm tra xem có phải đã phát xong tất cả không
-                if self.current_play_index >= len(self.audio_segments) - 1:
-                    # Đã phát xong tất cả
-                    self._add_log_item("🎵 Đã phát xong tất cả đoạn audio!")
-                    self._write_log_to_file("🎵 Đã phát xong tất cả đoạn audio!")
-                    self.is_playing_sequence = False
-                    self._reset_read_buttons()
-                else:
-                    # Audio dừng giữa chừng, có thể do lỗi
-                    self._add_log_item(f"⚠️ Audio dừng giữa chừng tại đoạn {self.current_play_index + 1}")
-                    self._write_log_to_file(f"⚠️ Audio dừng giữa chừng tại đoạn {self.current_play_index + 1}")
-                
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi xử lý trạng thái phát: {str(e)}"
-            self._add_log_item(error_msg)
-            self._write_log_to_file(error_msg)
-
-    def _convert_lang_code_for_tts(self, detected_lang: str) -> str:
-        """Chuyển đổi mã ngôn ngữ phát hiện thành mã TTS phù hợp"""
-        # Mapping từ mã ngôn ngữ phát hiện sang mã TTS
-        lang_mapping = {
-            'vi': 'vi',      # Tiếng Việt
-            'en': 'en',      # Tiếng Anh
-            'ja': 'ja',      # Tiếng Nhật
-            'zh': 'zh-CN',   # Tiếng Trung
-            'ko': 'ko',      # Tiếng Hàn
-            'fr': 'fr',      # Tiếng Pháp
-            'de': 'de',      # Tiếng Đức
-            'es': 'es',      # Tiếng Tây Ban Nha
-            'pt': 'pt',      # Tiếng Bồ Đào Nha
-            'th': 'th',      # Tiếng Thái
-            'ru': 'ru',      # Tiếng Nga
-            'it': 'it',      # Tiếng Ý
-        }
-        
-        # Lấy mã TTS tương ứng, nếu không có thì dùng mã gốc
-        return lang_mapping.get(detected_lang, detected_lang)
-
-    def _on_tts_error(self, error: str) -> None:
-        """Xử lý khi có lỗi TTS"""
-        error_msg = f"❌ Lỗi TTS: {error}"
-        self._add_log_item(error_msg)
-        self._write_log_to_file(error_msg)
-        self._reset_read_buttons()
-
-    def _create_audio_list_section(self, content_layout: QVBoxLayout) -> None:
-        """Tạo phần hiển thị danh sách file audio"""
-        # Container cho audio list
-        audio_list_container = QWidget()
-        audio_list_layout = QVBoxLayout()
-        audio_list_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Label tiêu đề
-        audio_list_label = QLabel("📁 Danh sách file audio đã tạo:")
-        audio_list_label.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                font-size: 14px;
-                color: #333;
-                padding: 5px;
-            }
-        """)
-        audio_list_layout.addWidget(audio_list_label)
-        
-        # List widget để hiển thị file
-        self.audio_list_widget = QTableWidget()
-        self.audio_list_widget.setColumnCount(4)
-        self.audio_list_widget.setHorizontalHeaderLabels(["STT", "File", "Thời lượng", "Trạng thái"])
-        self.audio_list_widget.setMinimumHeight(150)
-        self.audio_list_widget.setMaximumHeight(200)
-        
-        # Thiết lập cột
-        header = self.audio_list_widget.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)  # STT
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # File
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)  # Thời lượng
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)  # Trạng thái
-        
-        self.audio_list_widget.setColumnWidth(0, 50)   # STT
-        self.audio_list_widget.setColumnWidth(2, 100)  # Thời lượng
-        self.audio_list_widget.setColumnWidth(3, 100)  # Trạng thái
-        
-        audio_list_layout.addWidget(self.audio_list_widget)
-        
-        # Buttons cho audio list
-        audio_buttons_layout = QHBoxLayout()
-        
-        # Nút thêm vào file
-        self.btn_add_to_file = QPushButton("💾 Thêm vào file")
-        self.btn_add_to_file.clicked.connect(self._add_audio_to_file)
-        self.btn_add_to_file.setObjectName("btn_style_1")
-        self.btn_add_to_file.setEnabled(False)  # Chỉ enable khi có audio
-        
-        # Nút xóa danh sách
-        self.btn_clear_audio_list = QPushButton("🗑️ Xóa danh sách")
-        self.btn_clear_audio_list.clicked.connect(self._clear_audio_list)
-        self.btn_clear_audio_list.setObjectName("btn_style_2")
-        
-        # Nút mở thư mục chứa audio
-        self.btn_open_audio_folder = QPushButton("📂 Mở thư mục")
-        self.btn_open_audio_folder.clicked.connect(self._open_audio_folder)
-        self.btn_open_audio_folder.setObjectName("btn_style_1")
-        
-        audio_buttons_layout.addWidget(self.btn_add_to_file)
-        audio_buttons_layout.addWidget(self.btn_clear_audio_list)
-        audio_buttons_layout.addWidget(self.btn_open_audio_folder)
-        audio_buttons_layout.addStretch()
-        
-        audio_list_layout.addLayout(audio_buttons_layout)
-        
-        # Đặt layout cho container
-        audio_list_container.setLayout(audio_list_layout)
-        
-        # Thêm vào content layout
-        content_layout.addWidget(audio_list_container)
-
-    def _update_audio_list(self) -> None:
-        """Cập nhật danh sách file audio"""
-        try:
-            self.audio_list_widget.setRowCount(0)  # Xóa tất cả rows cũ
-            
-            if not self.audio_segments:
-                self.btn_add_to_file.setEnabled(False)
-                return
-            
-            # Thêm từng file audio vào list
-            for i, (audio_path, duration) in enumerate(zip(self.audio_segments, self.audio_durations)):
-                if not audio_path:
-                    continue
-                    
-                # Tạo row mới
-                row = self.audio_list_widget.rowCount()
-                self.audio_list_widget.insertRow(row)
-                
-                # STT
-                stt_item = QTableWidgetItem(str(i + 1))
-                stt_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.audio_list_widget.setItem(row, 0, stt_item)
-                
-                # Tên file
-                filename = os.path.basename(audio_path)
-                file_item = QTableWidgetItem(filename)
-                file_item.setToolTip(audio_path)  # Hiển thị đường dẫn đầy đủ khi hover
-                self.audio_list_widget.setItem(row, 1, file_item)
-                
-                # Thời lượng
-                duration_text = f"{duration//1000}s" if duration > 0 else "N/A"
-                duration_item = QTableWidgetItem(duration_text)
-                duration_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.audio_list_widget.setItem(row, 2, duration_item)
-                
-                # Trạng thái
-                status = "✅ Sẵn sàng" if os.path.exists(audio_path) else "❌ Lỗi"
-                status_item = QTableWidgetItem(status)
-                status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                self.audio_list_widget.setItem(row, 3, status_item)
-            
-            # Enable nút thêm vào file nếu có audio
-            self.btn_add_to_file.setEnabled(len(self.audio_segments) > 0)
-            
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi cập nhật danh sách audio: {str(e)}")
-
-    def _add_audio_to_file(self) -> None:
-        """Thêm danh sách audio vào file"""
-        try:
-            if not self.audio_segments:
-                QMessageBox.information(self, "Thông báo", "Không có file audio nào để thêm vào file.")
-                return
-            
-            # Chọn nơi lưu file
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, "Lưu danh sách audio", "audio_list.txt", 
-                "Text files (*.txt);;All files (*)"
-            )
-            
-            if not file_path:
-                return
-            
-            # Ghi danh sách audio vào file
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"Danh sách file audio - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 50 + "\n\n")
-                
-                for i, (audio_path, duration) in enumerate(zip(self.audio_segments, self.audio_durations)):
-                    if not audio_path:
-                        continue
-                        
-                    filename = os.path.basename(audio_path)
-                    duration_text = f"{duration//1000}s" if duration > 0 else "N/A"
-                    status = "✅ Sẵn sàng" if os.path.exists(audio_path) else "❌ Lỗi"
-                    
-                    f.write(f"{i+1:2d}. {filename}\n")
-                    f.write(f"    Đường dẫn: {audio_path}\n")
-                    f.write(f"    Thời lượng: {duration_text}\n")
-                    f.write(f"    Trạng thái: {status}\n")
-                    f.write(f"    Kích thước: {os.path.getsize(audio_path) if os.path.exists(audio_path) else 'N/A'} bytes\n")
-                    f.write("\n")
-            
-            self._add_log_item(f"✅ Đã lưu danh sách audio vào: {file_path}")
-            QMessageBox.information(self, "Thành công", f"Đã lưu danh sách {len(self.audio_segments)} file audio vào:\n{file_path}")
-            
-        except Exception as e:
-            error_msg = f"❌ Lỗi khi lưu danh sách audio: {str(e)}"
-            self._add_log_item(error_msg)
-            QMessageBox.critical(self, "Lỗi", error_msg)
-
-    def _clear_audio_list(self) -> None:
-        """Xóa danh sách audio"""
-        try:
-            self.audio_list_widget.setRowCount(0)
-            self.audio_segments.clear()
-            self.audio_durations.clear()
-            
-            if self.audio_player:
-                self.audio_player.clear_segments()
-            
-            self.btn_add_to_file.setEnabled(False)
-            self._add_log_item("🗑️ Đã xóa danh sách audio")
-            
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi xóa danh sách audio: {str(e)}")
-
-    def _open_audio_folder(self) -> None:
-        """Mở thư mục chứa file audio"""
-        try:
-            if not self.audio_segments:
-                QMessageBox.information(self, "Thông báo", "Không có file audio nào.")
-                return
-            
-            # Lấy thư mục của file audio đầu tiên
-            first_audio = self.audio_segments[0]
-            if first_audio and os.path.exists(first_audio):
-                folder_path = os.path.dirname(first_audio)
-                
-                # Mở thư mục trong file explorer
-                if os.name == 'nt':  # Windows
-                    os.startfile(folder_path)
-                elif os.name == 'posix':  # macOS/Linux
-                    import subprocess
-                    subprocess.run(['open', folder_path] if os.name == 'darwin' else ['xdg-open', folder_path])
-                
-                self._add_log_item(f"📂 Đã mở thư mục: {folder_path}")
-            else:
-                QMessageBox.warning(self, "Cảnh báo", "Không thể xác định thư mục chứa file audio.")
-                
-        except Exception as e:
-            self._add_log_item(f"❌ Lỗi khi mở thư mục: {str(e)}")

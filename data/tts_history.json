@@ -895,5 +895,18 @@
         "started_at": "2025-08-23T14:51:00.796405",
         "finished_at": "2025-08-23T14:51:00.796405",
         "status": "success"
+    },
+    {
+        "input_file": "Đây là đoạn văn bản demo để test chức năng ngắt đoạn.\n\nĐoạn này sẽ được chia thành nhiều phần nhỏ để tạo khoảng nghỉ.\n\nMỗi phần sẽ có nội dung riêng biệt và có thể ngắt tại bất kỳ vị trí nào.\n\nBạn có thể sử dụng nút \"✂️ Ngắt đoạn\" để chia đoạn này thành các phần nhỏ hơn.\n\nChức năng này rất hữu ích cho việc tạo bài thuyết trình hoặc audio book.\n\nHãy thử nghiệm với các khoảng nghỉ khác nhau: 3s, 4s, 5s, hoặc 10s.\n\nSau khi ngắt đoạn, bạn có thể xuất ra file MP3 hoàn chỉnh với các khoảng nghỉ đã tạo.",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 2,
+        "started_at": "2025-08-23T18:38:27.704655",
+        "finished_at": "2025-08-23T18:38:27.704655",
+        "status": "success"
     }
 ]
