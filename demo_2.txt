@@ -1,0 +1,8 @@
+Đây là file demo để test chức năng ngắt đoạn mới.
+
+Chức năng đã được sửa để:
+1. Sử dụng vị trí hiện tại của audio player để ngắt đoạn
+2. Bấm nút "✂️ Ngắt đoạn" để thực hiện
+3. Ngắt theo tùy chọn từ dropdown (3s, 4s, 5s, 10s)
+4. Giữ lại tên file cũ và thêm đoạn mới vào
+5. Vị trí ngắt đoạn được phép ở ĐẦU, CUỐI hoặc SAU segment

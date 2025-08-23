@@ -5,7 +5,10 @@ edge-tts>=6.0.0
 
 # Build tools (optional)
 pyinstaller>=5.0.0
-
+langdetect
+deep-translator
+google-generativeaz
+openai
 # Development dependencies (optional)
 # pytest>=6.0.0
 # pytest-qt>=4.0.0
