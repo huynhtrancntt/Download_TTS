@@ -181,9 +181,11 @@ class TranslateTab(UIToolbarTab):
         # Input text area
         self.input_text = QTextEdit()
         self.input_text.setMinimumHeight(200)
-        self.input_text.setPlaceholderText("Nhập văn bản cần dịch vào đây...")
+        self.input_text.setPlaceholderText("Nhập văn bản cần dịch vào đây... (Bấm Enter để dịch, Shift+Enter để xuống dòng)")
         # Kết nối signal textChanged để clear dữ liệu đích khi văn bản nguồn thay đổi
         self.input_text.textChanged.connect(self._on_source_text_changed)
+        # Kết nối signal returnPressed để dịch khi bấm Enter
+        self.input_text.installEventFilter(self)
         
         # Thêm nút đọc văn bản nguồn và combobox ngôn ngữ
         input_button_layout = QHBoxLayout()
@@ -204,7 +206,13 @@ class TranslateTab(UIToolbarTab):
 
         input_button_layout.addStretch()
         
+        # Thêm text hiển thị số từ và ký tự cho input
+        self.input_word_count_label = QLabel("")
+        self.input_word_count_label.setStyleSheet("color: #64748b; font-size: 12px; margin-top: 5px; text-align: right;")
+        self.input_word_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.input_word_count_label.setTextFormat(Qt.TextFormat.RichText)
         input_layout.addWidget(self.input_text)
+        input_layout.addWidget(self.input_word_count_label)
         input_layout.addLayout(input_button_layout)
         input_container.setLayout(input_layout)
         
@@ -218,6 +226,12 @@ class TranslateTab(UIToolbarTab):
         self.output_text.setMinimumHeight(200)
         self.output_text.setPlaceholderText("Kết quả dịch sẽ hiển thị ở đây...")
         self.output_text.setReadOnly(True)
+        
+        # Thêm text hiển thị số từ và ký tự cho output
+        self.output_word_count_label = QLabel("")
+        self.output_word_count_label.setStyleSheet("color: #64748b; font-size: 12px; margin-top: 5px; text-align: right;")
+        self.output_word_count_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.output_word_count_label.setTextFormat(Qt.TextFormat.RichText)
         input_button_layout_target = QHBoxLayout()
         self.read_target_btn = QPushButton("🔊 Đọc văn bản đích")
         self.read_target_btn.clicked.connect(self._read_target_text)
@@ -226,7 +240,7 @@ class TranslateTab(UIToolbarTab):
         
         # Combobox chọn voice cho văn bản đích
         self.target_tts_lang_combo = QComboBox()
-        self.target_tts_lang_combo.setFixedWidth(150)
+
         self.target_tts_lang_combo.setFixedHeight(30)
         self.target_tts_lang_combo.setCurrentText("Tự phát hiện")
         # Populate voices khi khởi tạo
@@ -236,6 +250,7 @@ class TranslateTab(UIToolbarTab):
         
         input_button_layout_target.addStretch()
         output_layout.addWidget(self.output_text)
+        output_layout.addWidget(self.output_word_count_label)
         output_layout.addLayout(input_button_layout_target)
         output_container.setLayout(output_layout)
         
@@ -829,7 +844,11 @@ class TranslateTab(UIToolbarTab):
             output_lines.append(f"{translated}")
             output_lines.append("")  # Dòng trống
         
-        self.output_text.setPlainText("\n".join(output_lines))
+        output_text = "\n".join(output_lines)
+        self.output_text.setPlainText(output_text)
+        
+        # Cập nhật số từ và ký tự cho output
+        self._update_word_count(output_text, self.output_word_count_label)
 
     def _attach_batch_worker(self, worker: MultiThreadTranslateWorker, filename: str) -> None:
         """Kết nối worker con của batch worker"""
@@ -1256,6 +1275,9 @@ class TranslateTab(UIToolbarTab):
         self.output_text.clear()
         self.translated_segments.clear()
         
+        # Xóa số từ và ký tự cho output
+        self._update_word_count("", self.output_word_count_label)
+        
         # Log thông báo
         self._add_log_item("🗑️ Đã xóa kết quả và clear audio")
 
@@ -1450,6 +1472,39 @@ class TranslateTab(UIToolbarTab):
         except Exception as e:
             print(f"❌ Lỗi khi ghi log vào file: {str(e)}")
     
+    def _update_word_count(self, text: str, label: QLabel) -> None:
+        """Cập nhật số từ và ký tự cho label"""
+        try:
+            if not text or not text.strip():
+                label.setText("")
+                return
+            
+            # Đếm từ (tách theo khoảng trắng)
+            words = len([word for word in text.split() if word.strip()])
+            
+            # Đếm ký tự (bao gồm cả khoảng trắng)
+            characters = len(text)
+            
+            # Cập nhật label với HTML formatting: số màu đỏ, text màu xám
+            label.setText(f'<span style="color: #10b981;">{words:,}</span> từ (<span style="color: #ff6b6b;">{characters:,}</span> ký tự)')
+            
+        except Exception as e:
+            print(f"Warning: Error updating word count: {e}")
+            label.setText("")
+
+    def eventFilter(self, obj, event) -> bool:
+        """Event filter để xử lý sự kiện Enter trong input_text"""
+        if obj == self.input_text and event.type() == event.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+                # Kiểm tra nếu đang giữ Shift thì cho phép xuống dòng
+                if event.modifiers() == Qt.KeyboardModifier.ShiftModifier:
+                    return False  # Cho phép xuống dòng bình thường
+                else:
+                    # Bấm Enter đơn thuần - kích hoạt dịch
+                    self.translate_now()
+                    return True  # Đã xử lý sự kiện
+        return False  # Không xử lý, để Qt xử lý bình thường
+
     def _clear_audio_and_reset_buttons(self) -> None:
         """Clear audio và reset nút đọc khi bắt đầu dịch"""
         try:
@@ -1485,12 +1540,19 @@ class TranslateTab(UIToolbarTab):
     def _on_source_text_changed(self):
         """Callback khi văn bản nguồn thay đổi - clear dữ liệu đích và reset nút đọc"""
         try:
+            # Cập nhật số từ và ký tự cho input
+            current_text = self.input_text.toPlainText()
+            self._update_word_count(current_text, self.input_word_count_label)
+            
             # Clear output text
             self.output_text.clear()
             
             # Clear translated segments
             if hasattr(self, 'translated_segments'):
                 self.translated_segments.clear()
+            
+            # Xóa số từ và ký tự cho output
+            self._update_word_count("", self.output_word_count_label)
             
             # Clear segment manager nếu có
             if hasattr(self, 'segment_manager') and self.segment_manager:
@@ -1710,7 +1772,9 @@ class TranslateTab(UIToolbarTab):
                     # Thêm tất cả voices của ngôn ngữ này
                     voices = voices_data[lang_code]["voices"]
                     for voice in voices:
-                        self.source_tts_lang_combo.addItem(voice["label"])
+                        # Lấy phần trước dấu ngoặc đơn: "Nam - NamMinh (vi-VN-NamMinhNeural)" -> "Nam - NamMinh"
+                        display_name = voice["label"].split(" (")[0] if " (" in voice["label"] else voice["label"]
+                        self.source_tts_lang_combo.addItem(display_name)
             
             # Đặt lại selection
             self.source_tts_lang_combo.setCurrentText("Tự phát hiện")
@@ -1734,7 +1798,9 @@ class TranslateTab(UIToolbarTab):
                     # Thêm tất cả voices của ngôn ngữ này
                     voices = voices_data[lang_code]["voices"]
                     for voice in voices:
-                        self.target_tts_lang_combo.addItem(voice["label"])
+                        # Lấy phần trước dấu ngoặc đơn: "Nam - NamMinh (vi-VN-NamMinhNeural)" -> "Nam - NamMinh"
+                        display_name = voice["label"].split(" (")[0] if " (" in voice["label"] else voice["label"]
+                        self.target_tts_lang_combo.addItem(display_name)
             
             # Đặt lại selection
             self.target_tts_lang_combo.setCurrentText("Tự phát hiện")
