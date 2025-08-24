@@ -89,6 +89,10 @@ class TranslateTab(UIToolbarTab):
         self.is_playing_sequence = False
         self.current_index: int = -1  # Thêm current_index
         
+        # TTS reading states
+        self.is_reading_source: bool = False
+        self.is_reading_target: bool = False
+        
         # Log file
         self.log_file_path = "testtr.txt"
 
@@ -414,22 +418,24 @@ class TranslateTab(UIToolbarTab):
         self.play_segments_btn = QPushButton("▶️ Phát tất cả")
         self.play_segments_btn.clicked.connect(self._play_all_segments)
         self.play_segments_btn.setObjectName("btn_style_1")
-        segment_controls.addWidget(self.play_segments_btn)
+        # segment_controls.addWidget(self.play_segments_btn)
         
         self.stop_segments_btn = QPushButton("⏹️ Dừng")
         self.stop_segments_btn.clicked.connect(self._stop_segments_playback)
         self.stop_segments_btn.setObjectName("btn_style_2")
-        segment_controls.addWidget(self.stop_segments_btn)
+        # segment_controls.addWidget(self.stop_segments_btn)
         
         self.clear_segments_btn = QPushButton("🗑️ Xóa tất cả")
         self.clear_segments_btn.clicked.connect(self._clear_all_segments)
         self.clear_segments_btn.setObjectName("btn_style_2")
-        segment_controls.addWidget(self.clear_segments_btn)
+        # segment_controls.addWidget(self.clear_segments_btn)
         
         segment_controls.addStretch()
-        self.segment_manager_layout.addLayout(segment_controls)
+        # self.segment_manager_layout.addLayout(segment_controls)
         
         self.segment_manager_group.setLayout(self.segment_manager_layout)
+        # Ẩn section mặc định khi khởi tạo
+        self.segment_manager_group.setVisible(False)
         content_layout.addWidget(self.segment_manager_group)
 
     def _setup_segment_manager(self) -> None:
@@ -519,7 +525,19 @@ class TranslateTab(UIToolbarTab):
                 
                 # Update timing labels
                 if stats['total_duration'] > 0:
-                    total_duration_str = f"{int(stats['total_duration'] / 1000 // 60):02d}:{int(stats['total_duration'] / 1000 % 60):02d}"
+                    total_seconds = stats['total_duration'] / 1000
+                    
+                    # Tính giờ, phút, giây
+                    hours = int(total_seconds // 3600)
+                    minutes = int((total_seconds % 3600) // 60)
+                    seconds = int(total_seconds % 60)
+                    
+                    # Format thời gian
+                    if hours > 0:
+                        total_duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                    else:
+                        total_duration_str = f"{minutes:02d}:{seconds:02d}"
+                    
                     self.total_duration_label.setText(f"Tổng thời lượng: {total_duration_str}")
                 else:
                     self.total_duration_label.setText("Tổng thời lượng: 00:00")
@@ -794,22 +812,34 @@ class TranslateTab(UIToolbarTab):
         worker.error.connect(lambda e: self._add_log_item(f"❌ Lỗi file {filename}: {e}"))
 
     def _read_source_text(self) -> None:
-        """Đọc văn bản nguồn bằng TTS"""
-        text = self.input_text.toPlainText().strip()
-        if not text:
-            QMessageBox.information(self, "Thông báo", "Vui lòng nhập văn bản cần đọc.")
-            return
-        
-        self._start_tts_reading(text, "source")
+        """Đọc văn bản nguồn bằng TTS - toggle play/stop"""
+        # Kiểm tra xem có đang đọc không
+        if hasattr(self, 'is_reading_source') and self.is_reading_source:
+            # Đang đọc -> dừng đọc
+            self._stop_tts_reading("source")
+        else:
+            # Chưa đọc -> bắt đầu đọc
+            text = self.input_text.toPlainText().strip()
+            if not text:
+                QMessageBox.information(self, "Thông báo", "Vui lòng nhập văn bản cần đọc.")
+                return
+            
+            self._start_tts_reading(text, "source")
 
     def _read_target_text(self) -> None:
-        """Đọc văn bản đích bằng TTS"""
-        text = self.output_text.toPlainText().strip()
-        if not text:
-            QMessageBox.information(self, "Thông báo", "Vui lòng dịch văn bản trước khi đọc.")
-            return
-        
-        self._start_tts_reading(text, "target")
+        """Đọc văn bản đích bằng TTS - toggle play/stop"""
+        # Kiểm tra xem có đang đọc không
+        if hasattr(self, 'is_reading_target') and self.is_reading_target:
+            # Đang đọc -> dừng đọc
+            self._stop_tts_reading("target")
+        else:
+            # Chưa đọc -> bắt đầu đọc
+            text = self.output_text.toPlainText().strip()
+            if not text:
+                QMessageBox.information(self, "Thông báo", "Vui lòng dịch văn bản trước khi đọc.")
+                return
+            
+            self._start_tts_reading(text, "target")
 
     def _start_tts_reading(self, text: str, text_type: str) -> None:
         """Bắt đầu đọc văn bản bằng TTS"""
@@ -823,16 +853,19 @@ class TranslateTab(UIToolbarTab):
                 self.tts_worker.stop()
                 self.tts_worker.wait(3000)
             
-            # Reset trạng thái các nút đọc
-            self._reset_read_buttons()
+            # Hiện section Quản lý Audio Segments
+            if hasattr(self, 'segment_manager_group'):
+                self.segment_manager_group.setVisible(True)
             
             # Cập nhật trạng thái nút đọc
             if text_type == "source":
-                self.read_source_btn.setEnabled(False)
-                self.read_source_btn.setText("🔄 Đang xử lý...")
+                self.is_reading_source = True
+                self.read_source_btn.setText("🔇 Tắt đọc văn bản nguồn")
+                self.read_source_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
             else:
-                self.read_target_btn.setEnabled(False)
-                self.read_target_btn.setText("🔄 Đang xử lý...")
+                self.is_reading_target = True
+                self.read_target_btn.setText("🔇 Tắt đọc văn bản đích")
+                self.read_target_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
             
             # Tạo TTS worker
             self.tts_worker = MTProducerWorker(
@@ -855,6 +888,43 @@ class TranslateTab(UIToolbarTab):
         except Exception as e:
             self._add_log_item(f"❌ Lỗi khi bắt đầu TTS: {e}", "error")
             self._reset_read_buttons()
+
+    def _stop_tts_reading(self, text_type: str) -> None:
+        """Dừng đọc văn bản bằng TTS và xóa segments"""
+        try:
+            # Dừng audio đang phát
+            if self.audio_player:
+                self.audio_player.stop()
+            
+            # Dừng TTS worker nếu đang chạy
+            if self.tts_worker and self.tts_worker.isRunning():
+                self.tts_worker.stop()
+                self.tts_worker.wait(3000)
+            
+            # Xóa tất cả segments
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                self.segment_manager.clear_segments()
+                self._add_log_item("🗑️ Đã xóa tất cả segments", "info")
+            
+            # Ẩn section Quản lý Audio Segments
+            if hasattr(self, 'segment_manager_group'):
+                self.segment_manager_group.setVisible(False)
+            
+            # Cập nhật trạng thái nút đọc
+            if text_type == "source":
+                self.is_reading_source = False
+                self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+                self.read_source_btn.setStyleSheet("")
+            else:
+                self.is_reading_target = False
+                self.read_target_btn.setText("🔊 Đọc văn bản đích")
+                self.read_target_btn.setStyleSheet("")
+            
+            # Log
+            self._add_log_item(f"⏹️ Đã dừng đọc văn bản {text_type}", "info")
+            
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi dừng TTS: {e}", "error")
     def _ensure_capacity(self, n: int) -> None:
         """Ensure segments list has enough capacity"""
         while len(self.segment_manager.segment_paths) < n:
@@ -891,6 +961,9 @@ class TranslateTab(UIToolbarTab):
             self.segment_manager.schedule_display_update(200)
         else:
             self.segment_manager._update_display()
+        
+        # Cập nhật UI của translate_tab.py
+        self._update_segment_display()
 
         # Update AudioPlayer
         if self.audio_player:
@@ -925,7 +998,7 @@ class TranslateTab(UIToolbarTab):
     def _on_tts_complete(self) -> None:
         """Callback khi TTS hoàn thành"""
         self._add_log_item("✅ TTS hoàn thành", "info")
-        self._reset_read_buttons()
+        # Không reset nút ở đây, để người dùng có thể dừng khi muốn
 
     def _on_tts_error(self, msg: str) -> None:
         """Callback khi TTS có lỗi"""

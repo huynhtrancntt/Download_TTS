@@ -834,7 +834,6 @@ class AudioPlayer(QWidget):
                 self.is_playing = False
                 self.btn_playpause.setText("▶️")
                 
-                print(f"check_current_global_pos: {self._check_current_global_pos()}")
                 if(self._check_current_global_pos()):
                     self.play_segment(0, 0)
                     self.stop()
