@@ -95,6 +95,16 @@ class LanguageManager:
         """Lấy voice nữ cho một ngôn ngữ cụ thể"""
         return self.get_voice_by_gender(language_code, "Nữ")
     
+    def get_voice_display_name(self, voice_label: str) -> str:
+        """Lấy tên hiển thị ngắn gọn của voice từ label đầy đủ"""
+        try:
+            # Tách phần "Gender - Name" từ "Gender - Name (shortname)"
+            if " (" in voice_label:
+                return voice_label.split(" (")[0]
+            return voice_label
+        except:
+            return voice_label
+    
     def detect_language_from_text(self, text: str) -> str:
         """Tự động phát hiện ngôn ngữ từ văn bản sử dụng langdetect"""
         try:

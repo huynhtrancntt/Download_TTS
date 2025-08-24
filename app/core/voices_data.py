@@ -1,6 +1,6 @@
 voices_data = {
   "af": {
-    "display_name": "af",
+    "display_name": "Tiếng Afrikaans",
     "voices": [
       {
         "gender": "Nam",
@@ -15,7 +15,7 @@ voices_data = {
     ]
   },
   "am": {
-    "display_name": "am",
+    "display_name": "Tiếng Amharic",
     "voices": [
       {
         "gender": "Nam",
@@ -30,7 +30,7 @@ voices_data = {
     ]
   },
   "ar": {
-    "display_name": "ar",
+    "display_name": "Tiếng Ả Rập",
     "voices": [
       {
         "gender": "Nam",
@@ -195,7 +195,7 @@ voices_data = {
     ]
   },
   "az": {
-    "display_name": "az",
+    "display_name": "Tiếng Azerbaijan",
     "voices": [
       {
         "gender": "Nam",
@@ -210,7 +210,7 @@ voices_data = {
     ]
   },
   "bg": {
-    "display_name": "bg",
+    "display_name": "Tiếng Bulgaria",
     "voices": [
       {
         "gender": "Nam",
@@ -225,7 +225,7 @@ voices_data = {
     ]
   },
   "bn": {
-    "display_name": "bn",
+    "display_name": "Tiếng Bengali",
     "voices": [
       {
         "gender": "Nam",
@@ -250,7 +250,7 @@ voices_data = {
     ]
   },
   "bs": {
-    "display_name": "bs",
+    "display_name": "Tiếng Bosnia",
     "voices": [
       {
         "gender": "Nam",
@@ -265,7 +265,7 @@ voices_data = {
     ]
   },
   "ca": {
-    "display_name": "ca",
+    "display_name": "Tiếng Catalan",
     "voices": [
       {
         "gender": "Nam",
@@ -280,7 +280,7 @@ voices_data = {
     ]
   },
   "cs": {
-    "display_name": "cs",
+    "display_name": "Tiếng Séc",
     "voices": [
       {
         "gender": "Nam",
@@ -295,7 +295,7 @@ voices_data = {
     ]
   },
   "cy": {
-    "display_name": "cy",
+    "display_name": "Tiếng Wales",
     "voices": [
       {
         "gender": "Nam",
@@ -310,7 +310,7 @@ voices_data = {
     ]
   },
   "da": {
-    "display_name": "da",
+    "display_name": "Tiếng Đan Mạch",
     "voices": [
       {
         "gender": "Nam",
@@ -380,7 +380,7 @@ voices_data = {
     ]
   },
   "el": {
-    "display_name": "el",
+    "display_name": "Tiếng Hy Lạp",
     "voices": [
       {
         "gender": "Nam",
@@ -865,7 +865,7 @@ voices_data = {
     ]
   },
   "et": {
-    "display_name": "et",
+    "display_name": "Tiếng Estonia",
     "voices": [
       {
         "gender": "Nam",
@@ -880,7 +880,7 @@ voices_data = {
     ]
   },
   "fa": {
-    "display_name": "fa",
+    "display_name": "Tiếng Ba Tư",
     "voices": [
       {
         "gender": "Nam",
@@ -895,7 +895,7 @@ voices_data = {
     ]
   },
   "fi": {
-    "display_name": "fi",
+    "display_name": "Tiếng Phần Lan",
     "voices": [
       {
         "gender": "Nam",
@@ -910,7 +910,7 @@ voices_data = {
     ]
   },
   "fil": {
-    "display_name": "fil",
+    "display_name": "Tiếng Filipino",
     "voices": [
       {
         "gender": "Nam",
@@ -995,7 +995,7 @@ voices_data = {
     ]
   },
   "ga": {
-    "display_name": "ga",
+    "display_name": "Tiếng Ireland",
     "voices": [
       {
         "gender": "Nam",
@@ -1010,7 +1010,7 @@ voices_data = {
     ]
   },
   "gl": {
-    "display_name": "gl",
+    "display_name": "Tiếng Galicia",
     "voices": [
       {
         "gender": "Nam",
@@ -1025,7 +1025,7 @@ voices_data = {
     ]
   },
   "gu": {
-    "display_name": "gu",
+    "display_name": "Tiếng Gujarati",
     "voices": [
       {
         "gender": "Nam",
@@ -1040,7 +1040,7 @@ voices_data = {
     ]
   },
   "he": {
-    "display_name": "he",
+    "display_name": "Tiếng Hebrew",
     "voices": [
       {
         "gender": "Nam",
@@ -1055,7 +1055,7 @@ voices_data = {
     ]
   },
   "hi": {
-    "display_name": "hi",
+    "display_name": "Tiếng Hindi",
     "voices": [
       {
         "gender": "Nam",
@@ -1070,7 +1070,7 @@ voices_data = {
     ]
   },
   "hr": {
-    "display_name": "hr",
+    "display_name": "Tiếng Croatia",
     "voices": [
       {
         "gender": "Nam",
@@ -1085,7 +1085,7 @@ voices_data = {
     ]
   },
   "hu": {
-    "display_name": "hu",
+    "display_name": "Tiếng Hungary",
     "voices": [
       {
         "gender": "Nam",
@@ -1115,7 +1115,7 @@ voices_data = {
     ]
   },
   "is": {
-    "display_name": "is",
+    "display_name": "Tiếng Iceland",
     "voices": [
       {
         "gender": "Nam",
@@ -1130,7 +1130,7 @@ voices_data = {
     ]
   },
   "it": {
-    "display_name": "it",
+    "display_name": "Tiếng Ý",
     "voices": [
       {
         "gender": "Nam",
@@ -1155,7 +1155,7 @@ voices_data = {
     ]
   },
   "iu": {
-    "display_name": "iu",
+    "display_name": "Tiếng Inuktitut",
     "voices": [
       {
         "gender": "Nam",
@@ -1195,7 +1195,7 @@ voices_data = {
     ]
   },
   "jv": {
-    "display_name": "jv",
+    "display_name": "Tiếng Java",
     "voices": [
       {
         "gender": "Nam",
@@ -1210,7 +1210,7 @@ voices_data = {
     ]
   },
   "ka": {
-    "display_name": "ka",
+    "display_name": "Tiếng Georgia",
     "voices": [
       {
         "gender": "Nam",
@@ -1225,7 +1225,7 @@ voices_data = {
     ]
   },
   "kk": {
-    "display_name": "kk",
+    "display_name": "Tiếng Kazakh",
     "voices": [
       {
         "gender": "Nam",
@@ -1240,7 +1240,7 @@ voices_data = {
     ]
   },
   "km": {
-    "display_name": "km",
+    "display_name": "Tiếng Khmer",
     "voices": [
       {
         "gender": "Nam",
@@ -1255,7 +1255,7 @@ voices_data = {
     ]
   },
   "kn": {
-    "display_name": "kn",
+    "display_name": "Tiếng Kannada",
     "voices": [
       {
         "gender": "Nam",
@@ -1290,7 +1290,7 @@ voices_data = {
     ]
   },
   "lo": {
-    "display_name": "lo",
+    "display_name": "Tiếng Lào",
     "voices": [
       {
         "gender": "Nam",
@@ -1305,7 +1305,7 @@ voices_data = {
     ]
   },
   "lt": {
-    "display_name": "lt",
+    "display_name": "Tiếng Lithuania",
     "voices": [
       {
         "gender": "Nam",
@@ -1320,7 +1320,7 @@ voices_data = {
     ]
   },
   "lv": {
-    "display_name": "lv",
+    "display_name": "Tiếng Latvia",
     "voices": [
       {
         "gender": "Nam",
@@ -1335,7 +1335,7 @@ voices_data = {
     ]
   },
   "mk": {
-    "display_name": "mk",
+    "display_name": "Tiếng Macedonia",
     "voices": [
       {
         "gender": "Nam",
@@ -1350,7 +1350,7 @@ voices_data = {
     ]
   },
   "ml": {
-    "display_name": "ml",
+    "display_name": "Tiếng Malayalam",
     "voices": [
       {
         "gender": "Nam",
@@ -1365,7 +1365,7 @@ voices_data = {
     ]
   },
   "mn": {
-    "display_name": "mn",
+    "display_name": "Tiếng Mông Cổ",
     "voices": [
       {
         "gender": "Nam",
@@ -1380,7 +1380,7 @@ voices_data = {
     ]
   },
   "mr": {
-    "display_name": "mr",
+    "display_name": "Tiếng Marathi",
     "voices": [
       {
         "gender": "Nam",
@@ -1395,7 +1395,7 @@ voices_data = {
     ]
   },
   "ms": {
-    "display_name": "ms",
+    "display_name": "Tiếng Malaysia",
     "voices": [
       {
         "gender": "Nam",
@@ -1410,7 +1410,7 @@ voices_data = {
     ]
   },
   "mt": {
-    "display_name": "mt",
+    "display_name": "Tiếng Malta",
     "voices": [
       {
         "gender": "Nam",
@@ -1425,7 +1425,7 @@ voices_data = {
     ]
   },
   "my": {
-    "display_name": "my",
+    "display_name": "Tiếng Myanmar",
     "voices": [
       {
         "gender": "Nam",
@@ -1440,7 +1440,7 @@ voices_data = {
     ]
   },
   "nb": {
-    "display_name": "nb",
+    "display_name": "Tiếng Na Uy",
     "voices": [
       {
         "gender": "Nam",
@@ -1455,7 +1455,7 @@ voices_data = {
     ]
   },
   "ne": {
-    "display_name": "ne",
+    "display_name": "Tiếng Nepal",
     "voices": [
       {
         "gender": "Nam",
@@ -1470,7 +1470,7 @@ voices_data = {
     ]
   },
   "nl": {
-    "display_name": "nl",
+    "display_name": "Tiếng Hà Lan",
     "voices": [
       {
         "gender": "Nam",
@@ -1500,7 +1500,7 @@ voices_data = {
     ]
   },
   "pl": {
-    "display_name": "pl",
+    "display_name": "Tiếng Ba Lan",
     "voices": [
       {
         "gender": "Nam",
@@ -1515,7 +1515,7 @@ voices_data = {
     ]
   },
   "ps": {
-    "display_name": "ps",
+    "display_name": "Tiếng Pashto",
     "voices": [
       {
         "gender": "Nam",
@@ -1560,7 +1560,7 @@ voices_data = {
     ]
   },
   "ro": {
-    "display_name": "ro",
+    "display_name": "Tiếng Romania",
     "voices": [
       {
         "gender": "Nam",
@@ -1590,7 +1590,7 @@ voices_data = {
     ]
   },
   "si": {
-    "display_name": "si",
+    "display_name": "Tiếng Sinhala",
     "voices": [
       {
         "gender": "Nam",
@@ -1605,7 +1605,7 @@ voices_data = {
     ]
   },
   "sk": {
-    "display_name": "sk",
+    "display_name": "Tiếng Slovakia",
     "voices": [
       {
         "gender": "Nam",
@@ -1620,7 +1620,7 @@ voices_data = {
     ]
   },
   "sl": {
-    "display_name": "sl",
+    "display_name": "Tiếng Slovenia",
     "voices": [
       {
         "gender": "Nam",
@@ -1635,7 +1635,7 @@ voices_data = {
     ]
   },
   "so": {
-    "display_name": "so",
+    "display_name": "Tiếng Somali",
     "voices": [
       {
         "gender": "Nam",
@@ -1650,7 +1650,7 @@ voices_data = {
     ]
   },
   "sq": {
-    "display_name": "sq",
+    "display_name": "Tiếng Albania",
     "voices": [
       {
         "gender": "Nam",
@@ -1665,7 +1665,7 @@ voices_data = {
     ]
   },
   "sr": {
-    "display_name": "sr",
+    "display_name": "Tiếng Serbia",
     "voices": [
       {
         "gender": "Nam",
@@ -1680,7 +1680,7 @@ voices_data = {
     ]
   },
   "su": {
-    "display_name": "su",
+    "display_name": "Tiếng Sunda",
     "voices": [
       {
         "gender": "Nam",
@@ -1695,7 +1695,7 @@ voices_data = {
     ]
   },
   "sv": {
-    "display_name": "sv",
+    "display_name": "Tiếng Thụy Điển",
     "voices": [
       {
         "gender": "Nam",
@@ -1710,7 +1710,7 @@ voices_data = {
     ]
   },
   "sw": {
-    "display_name": "sw",
+    "display_name": "Tiếng Swahili",
     "voices": [
       {
         "gender": "Nam",
@@ -1735,7 +1735,7 @@ voices_data = {
     ]
   },
   "ta": {
-    "display_name": "ta",
+    "display_name": "Tiếng Tamil",
     "voices": [
       {
         "gender": "Nam",
@@ -1780,7 +1780,7 @@ voices_data = {
     ]
   },
   "te": {
-    "display_name": "te",
+    "display_name": "Tiếng Telugu",
     "voices": [
       {
         "gender": "Nam",
@@ -1810,7 +1810,7 @@ voices_data = {
     ]
   },
   "tr": {
-    "display_name": "tr",
+    "display_name": "Tiếng Thổ Nhĩ Kỳ",
     "voices": [
       {
         "gender": "Nam",
@@ -1825,7 +1825,7 @@ voices_data = {
     ]
   },
   "uk": {
-    "display_name": "uk",
+    "display_name": "Tiếng Ukraine",
     "voices": [
       {
         "gender": "Nam",
@@ -1840,7 +1840,7 @@ voices_data = {
     ]
   },
   "ur": {
-    "display_name": "ur",
+    "display_name": "Tiếng Urdu",
     "voices": [
       {
         "gender": "Nam",
@@ -1865,7 +1865,7 @@ voices_data = {
     ]
   },
   "uz": {
-    "display_name": "uz",
+    "display_name": "Tiếng Uzbek",
     "voices": [
       {
         "gender": "Nam",
@@ -1970,7 +1970,7 @@ voices_data = {
     ]
   },
   "zu": {
-    "display_name": "zu",
+    "display_name": "Tiếng Zulu",
     "voices": [
       {
         "gender": "Nam",

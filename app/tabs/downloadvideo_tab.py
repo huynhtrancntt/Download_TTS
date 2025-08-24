@@ -9,6 +9,7 @@ from PySide6.QtCore import QThreadPool
 from app.uiToolbarTab import UIToolbarTab
 
 from app.core.config import AppConfig
+from app.core.language_manager import language_manager
 
 from pathlib import Path
 
@@ -45,6 +46,9 @@ class DownloadVideoTab(UIToolbarTab):
             self.thread_pool.setMaxThreadCount(8)
         except Exception:
             pass
+        
+        # Language management
+        self.languages = language_manager.get_available_languages()
 
 
 
@@ -159,20 +163,19 @@ class DownloadVideoTab(UIToolbarTab):
                 self.sub_mode.setCurrentIndex(i)
                 break
         self.language_box = QComboBox()
-        self.languages = [
-            ("Tiếng Việt", "vi"),
-            ("Tiếng Anh", "en"),
-            ("Tiếng Nhật", "ja"),
-            ("Tiếng Trung", "zh")
-        ]
-        for name, code in self.languages:
-            self.language_box.addItem(name, userData=code)
-
-        # Chọn ngôn ngữ theo mã code (VD: "ja")
-        for i in range(self.language_box.count()):
-            if self.language_box.itemData(i) == "vi":
-                self.language_box.setCurrentIndex(i)
-                break
+        # Sử dụng voices_data từ language_manager
+        vietnamese_index = 0  # Mặc định index 0
+        
+        # Thêm tất cả ngôn ngữ vào combobox
+        for i, (display_name, lang_code) in enumerate(self.languages):
+            if lang_code != "auto":  # Bỏ qua "Tự phát hiện"
+                self.language_box.addItem(display_name, userData=lang_code)
+                # Tìm tiếng Việt để đặt làm mặc định
+                if lang_code == "vi":
+                    vietnamese_index = i
+        
+        # Đặt tiếng Việt làm mặc định
+        self.language_box.setCurrentIndex(vietnamese_index)
         # Threads spinbox
         self.theard_video = QSpinBox()
         self.theard_video.setRange(1, 16)

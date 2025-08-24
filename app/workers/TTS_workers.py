@@ -11,6 +11,7 @@ import time
 import random
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tokenize import Double
 from typing import Optional, List
 
 from PySide6.QtCore import QThread, Signal
@@ -46,15 +47,15 @@ class MTProducerWorker(QThread):
     all_done = Signal()                    # all processing done
     error = Signal(str)                    # error message
 
-    def __init__(self, text: str, voice: str, rate: int, pitch: int, max_len: int, workers: int) -> None:
+    def __init__(self, text: str, voice: str, rate: float, pitch: float, max_len: int, workers: int) -> None:
         """
         Khởi tạo worker TTS đa luồng
 
         Args:
             text: Văn bản cần chuyển đổi
             voice: Giọng nói (ví dụ: "vi-VN-HoaiMyNeural")
-            rate: Tốc độ (-50 đến 50)
-            pitch: Cao độ (-12 đến 12)
+            rate: Tốc độ (ví dụ: "+20%", "-30%", "0%")
+            pitch: Cao độ (ví dụ: "+5Hz", "-10Hz", "0Hz")
             max_len: Độ dài tối đa mỗi đoạn (ký tự)
             workers: Số luồng xử lý song song
         """
@@ -63,8 +64,8 @@ class MTProducerWorker(QThread):
         # Tham số TTS
         self.text: str = text
         self.voice: str = voice
-        self.rate: int = rate
-        self.pitch: int = pitch
+        self.rate: float = rate
+        self.pitch: float = pitch
         self.max_len: int = max_len
         self.workers: int = max(1, workers)  # Tối thiểu 1 worker
         self.group_max_items: int = 10      # NEW: tối đa bao nhiêu ý/nhóm
@@ -89,7 +90,6 @@ class MTProducerWorker(QThread):
             if not self.text.strip():
                 self.error.emit("❌ Chưa có nội dung văn bản để xử lý.")
                 return
-
             # 1) Tách ý (ý đơn) — dùng ngưỡng nhỏ hơn để ý không quá dài
             ideas = split_text(self.text, self.max_len)
             # 2) Gộp ý thành cụm lớn hơn — giữ đúng thứ tự
@@ -112,6 +112,7 @@ class MTProducerWorker(QThread):
             self.tmpdir = self.tmpdir / str(uuid.uuid4())
             self.tmpdir.mkdir(parents=True, exist_ok=True)
             hide_directory_on_windows(self.tmpdir)
+            # print(f"self.tmpdir: {self.tmpdir}")
             self.status.emit(
                 f"🚀 Bắt đầu sinh {total} đoạn audio bằng {self.workers} luồng...")
 
@@ -134,9 +135,11 @@ class MTProducerWorker(QThread):
                     path = os.path.join(self.tmpdir, f"part_{index1:04d}.mp3")
                     tts_sync_save(content, path, self.voice,
                                   self.rate, self.pitch)
+                    # print(f"path: {path}")
                     dur = get_mp3_duration_ms(path)
                     return (index1, path, dur)
                 except Exception as e:
+                    # print(f"Lỗi xử lý đoạn {index1}: {str(e)}")
                     raise Exception(f"Lỗi xử lý đoạn {index1}: {str(e)}")
 
             # Xử lý đa luồng theo batch để tránh treo và rate-limit
@@ -248,7 +251,7 @@ class OneFileWorker(QThread):
     done = Signal(str, str)            # output_path, filename
     failed = Signal(str, str)          # error_msg, filename
 
-    def __init__(self, txt_path: str, voice: str, rate: int, pitch: int,
+    def __init__(self, txt_path: str, voice: str, rate: str, pitch: str,
                  maxlen: int, gap_ms: int, workers_chunk: int) -> None:
         """
         Khởi tạo worker xử lý một file
@@ -256,8 +259,8 @@ class OneFileWorker(QThread):
         Args:
             txt_path: Đường dẫn file văn bản
             voice: Giọng nói
-            rate: Tốc độ
-            pitch: Cao độ
+            rate: Tốc độ (ví dụ: "+20%", "-30%", "0%")
+            pitch: Cao độ (ví dụ: "+5Hz", "-10Hz", "0Hz")
             maxlen: Độ dài tối đa mỗi chunk
             gap_ms: Khoảng cách giữa các chunk (ms)
             workers_chunk: Số luồng xử lý chunk
@@ -267,8 +270,8 @@ class OneFileWorker(QThread):
         # Tham số xử lý
         self.txt_path: str = txt_path
         self.voice: str = voice
-        self.rate: int = rate
-        self.pitch: int = pitch
+        self.rate: str = rate
+        self.pitch: str = pitch
         self.maxlen: int = maxlen
         self.gap_ms: int = gap_ms
         self.workers_chunk: int = max(1, workers_chunk)
@@ -304,8 +307,9 @@ class OneFileWorker(QThread):
 
             def job(idx1: int, content: str):
                 part_path = str(self.tempdir / f"part_{idx1:04d}.mp3")
-                tts_sync_save(content, part_path, self.voice,
-                              self.rate, self.pitch)
+                print(f"part_path: {part_path}")
+                # tts_sync_save(content, part_path, self.voice,
+                #               self.rate, self.pitch)
                 d = get_mp3_duration_ms(part_path)
                 return (idx1, part_path, d)
 
@@ -395,8 +399,21 @@ class BatchWorker(QThread):
     fileStatus = Signal(str)
     attachWorker = Signal(object, str)
 
-    def __init__(self, files: list[str], voice: str, rate: int, pitch: int,
+    def __init__(self, files: list[str], voice: str, rate: str, pitch: str,
                  maxlen: int, gap_ms: int, workers_chunk: int, workers_file: int):
+        """
+        Khởi tạo worker xử lý batch nhiều file
+
+        Args:
+            files: Danh sách đường dẫn file văn bản
+            voice: Giọng nói
+            rate: Tốc độ (ví dụ: "+20%", "-30%", "0%")
+            pitch: Cao độ (ví dụ: "+5Hz", "-10Hz", "0Hz")
+            maxlen: Độ dài tối đa mỗi chunk
+            gap_ms: Khoảng cách giữa các chunk (ms)
+            workers_chunk: Số luồng xử lý chunk trong mỗi file
+            workers_file: Số file xử lý song song
+        """
         super().__init__()
         self.files = files
         self.voice = voice

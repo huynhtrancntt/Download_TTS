@@ -252,7 +252,7 @@ class TranslateTab(UIToolbarTab):
 
         # Cột 1: Label Dịch vụ
         service_label = QLabel("Dịch vụ:")
-        service_label.setFixedWidth(100)  # Đặt độ rộng cố định cho label
+        service_label.setFixedWidth(120)  # Đặt độ rộng cố định cho label
         first_row.addWidget(service_label)
 
         # Cột 2: Combobox Dịch vụ
@@ -287,7 +287,7 @@ class TranslateTab(UIToolbarTab):
         # Cột 1: Label Ngôn ngữ nguồn
         source_label = QLabel("Ngôn ngữ nguồn:")
         # Đặt độ rộng cố định giống service_label
-        source_label.setFixedWidth(100)
+        source_label.setFixedWidth(120)
         second_row.addWidget(source_label)
 
         # Cột 2: Combobox Ngôn ngữ nguồn
@@ -326,30 +326,28 @@ class TranslateTab(UIToolbarTab):
         
         # Cột 2: Label Max Length
         max_len_label = QLabel("Độ dài tối đa:")
-        max_len_label.setFixedWidth(100)
+        max_len_label.setFixedWidth(120)
         third_row.addWidget(max_len_label)
         
         # Cột 3: Spinbox Max Length
         self.max_len_spinbox = QSpinBox()
-        self.max_len_spinbox.setRange(100, 1000)
-        self.max_len_spinbox.setValue(500)
+        self.max_len_spinbox.setRange(100, 4000)
+        self.max_len_spinbox.setValue(AppConfig.DEFAULT_MAXLEN)
         self.max_len_spinbox.setFixedHeight(30)
-        self.max_len_spinbox.setFixedWidth(100)
+        self.max_len_spinbox.setFixedWidth(150)
         self.max_len_spinbox.setSuffix(" ký tự")
         third_row.addWidget(self.max_len_spinbox)
-        
-        # Cột 4: Label Workers
-        workers_label = QLabel("Số luồng:")
-        workers_label.setFixedWidth(80)
-        third_row.addWidget(workers_label)
+        third_row.addStretch()
         
         # Cột 5: Spinbox Workers
         self.workers_spinbox = QSpinBox()
-        self.workers_spinbox.setRange(1, 3)
-        self.workers_spinbox.setValue(3)
+        self.workers_spinbox.setRange(1, 16)
+        self.workers_spinbox.setValue(AppConfig.DEFAULT_WORKERS_PLAYER)
+        self.workers_spinbox.setSuffix(" Thread")
         self.workers_spinbox.setFixedHeight(30)
-        self.workers_spinbox.setFixedWidth(80)
+        self.workers_spinbox.setFixedWidth(200)
         third_row.addWidget(self.workers_spinbox)
+       
         
         parent_layout.addLayout(third_row)
 
@@ -696,10 +694,8 @@ class TranslateTab(UIToolbarTab):
         # Clear audio và reset nút đọc trước khi bắt đầu dịch
         self._clear_audio_and_reset_buttons()
         
-        if self.is_batch_mode:
-            self._start_batch_translation()
-        else:
-            self._start_single_translation()
+        self._start_single_translation()
+          
 
     def _start_single_translation(self) -> None:
         """Bắt đầu dịch một văn bản"""

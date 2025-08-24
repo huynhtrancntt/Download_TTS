@@ -142,10 +142,10 @@ class TTSTab(UIToolbarTab):
         self.theard_edge_tts.setSuffix(" Thread")
 
         # Max length spinbox
-        self.maxlen_spin_edge_tts = QSpinBox()
-        self.maxlen_spin_edge_tts.setRange(80, 2000)
-        self.maxlen_spin_edge_tts.setValue(AppConfig.DEFAULT_MAXLEN)
-        self.maxlen_spin_edge_tts.setSuffix(" ký tự/đoạn")
+        self.max_len_spinbox = QSpinBox()
+        self.max_len_spinbox.setRange(199, 4000)
+        self.max_len_spinbox.setValue(AppConfig.DEFAULT_MAXLEN)
+        self.max_len_spinbox.setSuffix(" ký tự/đoạn")
 
         # Gap spinbox
         self.gap_spin_edge_tts = QSpinBox()
@@ -154,9 +154,8 @@ class TTSTab(UIToolbarTab):
         self.gap_spin_edge_tts.setSuffix(" ms nghỉ ghép")
 
         # Add to layout
-        row1_layout.addWidget(QLabel("Thread"))
         row1_layout.addWidget(self.theard_edge_tts)
-        row1_layout.addWidget(self.maxlen_spin_edge_tts)
+        row1_layout.addWidget(self.max_len_spinbox)
         row1_layout.addWidget(self.gap_spin_edge_tts)
         row1_layout.addStretch()
 
@@ -276,26 +275,26 @@ class TTSTab(UIToolbarTab):
 
         # Speed slider
         self.speed_slider = QSlider(Qt.Horizontal)
-        self.speed_slider.setRange(50, 200)
-        self.speed_slider.setValue(100)
-        self.speed_slider.setTickInterval(10)
+        self.speed_slider.setRange(-200, 200)
+        self.speed_slider.setValue(0)
+        self.speed_slider.setTickInterval(50)
         self.speed_slider.setTickPosition(QSlider.TicksBelow)
 
-        self.lbl_speed_val = QLabel("1.0")
+        self.lbl_speed_val = QLabel("0")
         self.speed_slider.valueChanged.connect(
-            lambda v: self.lbl_speed_val.setText(f"{v/100:.1f}")
+            lambda v: self.lbl_speed_val.setText(f"{v/100:.1f}") # hiển thị -2.0 .. 2.0
         )
 
         # Pitch slider
         self.pitch_slider = QSlider(Qt.Horizontal)
-        self.pitch_slider.setRange(-50, 50)
+        self.pitch_slider.setRange(-200, 200)
         self.pitch_slider.setValue(0)
-        self.pitch_slider.setTickInterval(10)
+        self.pitch_slider.setTickInterval(50)
         self.pitch_slider.setTickPosition(QSlider.TicksBelow)
 
-        self.lbl_pitch_val = QLabel("1.0")
+        self.lbl_pitch_val = QLabel("0")
         self.pitch_slider.valueChanged.connect(
-            lambda v: self.lbl_pitch_val.setText(f"{1 + v/100:.1f}")
+            lambda v: self.lbl_pitch_val.setText(f"{v/100:.1f}")
         )
 
         row_layout.addWidget(QLabel("Tốc độ"))
@@ -591,23 +590,6 @@ class TTSTab(UIToolbarTab):
                 QTimer.singleShot(180, lambda: _attempt_seek(3))
         except Exception:
             pass
-
-    # def append_history(self, text: str, meta: Optional[dict] = None) -> None:
-    #     """Add item to TTS history"""
-    #     if self.history:
-    #         # Ensure meta exists and inject current language
-    #         meta_payload = dict(meta) if isinstance(meta, dict) else {}
-    #         try:
-    #             if hasattr(self, 'cmb_lang') and self.cmb_lang is not None:
-    #                 # Prefer stored userData (code), fallback to text
-    #                 lang_code = self.cmb_lang.currentData()
-    #                 if not lang_code:
-    #                     lang_code = self.cmb_lang.currentText()
-    #                 if 'lang' not in meta_payload and lang_code:
-    #                     meta_payload['lang'] = lang_code
-    #         except Exception:
-    #             pass
-    #         self.history.panel.add_history(text, meta=meta_payload)
 
     def _on_language_changed(self, language_name: str) -> None:
         """Callback when language selection changes"""
@@ -1217,7 +1199,6 @@ class TTSTab(UIToolbarTab):
         selected_lang = self.cmb_lang.currentText()
         selected_voice_display = self.cmb_gender.currentText()
         selected_voice_shortname = self.cmb_gender.currentData()
-        
         # Lấy mã ngôn ngữ
         lang_code = language_manager.code_by_name(selected_lang)
         
@@ -1232,9 +1213,21 @@ class TTSTab(UIToolbarTab):
         # Log voice được chọn
         self._add_log_item(f"🎯 Voice được chọn: {voice_name} ({selected_lang} - {selected_voice_display})", "info")
         
-        # Create new worker
+        # Lấy giá trị từ UI
+        max_length = self.max_len_spinbox.value()
+        workers_id = self.theard_edge_tts.value()
+        
+        # Xử lý tốc độ: chuyển từ 50-200 về -50% đến +100%
+        speed_slider_value = self.speed_slider.value()
+        
+        # Xử lý cao độ: chuyển từ -50 đến +50 về Hz
+        pitch_slider_value = self.pitch_slider.value()
+        # Log các tham số đã chọn
+        self._add_log_item(f"⚙️ Tham số: Tốc độ {speed_slider_value}, Cao độ {pitch_slider_value}, Độ dài tối đa {max_length} ký tự", "info")
+        
+        # Create new worker với giá trị từ UI
         self.worker = MTProducerWorker(
-            text, voice_name, 0, 0, 500, 4)
+            text, voice_name, int(speed_slider_value), int(pitch_slider_value), max_length, workers_id)
 
         # Connect signals
         self.worker.segment_ready.connect(self.on_segment_ready)
