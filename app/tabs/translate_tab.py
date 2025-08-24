@@ -27,6 +27,7 @@ from app.workers.TTS_workers import MTProducerWorker
 from app.core.segment_manager import SegmentManager
 from app.core.voices_data import voices_data
 
+from app.utils.helps import clean_all_temp_parts
 
 # Tạo danh sách ngôn ngữ từ voices_data
 LANGS = [("Tự phát hiện", "auto")] + [(voices_data[lang]["display_name"], lang) for lang in voices_data.keys()]
@@ -181,6 +182,8 @@ class TranslateTab(UIToolbarTab):
         self.input_text = QTextEdit()
         self.input_text.setMinimumHeight(200)
         self.input_text.setPlaceholderText("Nhập văn bản cần dịch vào đây...")
+        # Kết nối signal textChanged để clear dữ liệu đích khi văn bản nguồn thay đổi
+        self.input_text.textChanged.connect(self._on_source_text_changed)
         
         # Thêm nút đọc văn bản nguồn và combobox ngôn ngữ
         input_button_layout = QHBoxLayout()
@@ -693,6 +696,9 @@ class TranslateTab(UIToolbarTab):
 
     def translate_now(self) -> None:
         """Bắt đầu dịch thuật"""
+        # Clear audio và reset nút đọc trước khi bắt đầu dịch
+        self._clear_audio_and_reset_buttons()
+        
         if self.is_batch_mode:
             self._start_batch_translation()
         else:
@@ -894,11 +900,17 @@ class TranslateTab(UIToolbarTab):
                     # Ẩn section Quản lý Audio Segments khi chuyển đổi
                     if hasattr(self, 'segment_manager_group'):
                         self.segment_manager_group.setVisible(False)
+                    # Enable combobox TTS đích
+                    self.target_tts_lang_combo.setEnabled(True)
+                    # Xóa dữ liệu tạm khi chuyển đổi
+                    clean_all_temp_parts()
                 
                 # Bắt đầu đọc văn bản nguồn
                 self.is_reading_source = True
                 self.read_source_btn.setText("🔇 Tắt đọc văn bản nguồn")
                 self.read_source_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
+                # Disable combobox TTS nguồn khi đang đọc
+                self.source_tts_lang_combo.setEnabled(False)
             else:  # target
                 # Nếu đang đọc văn bản nguồn, dừng nó trước
                 if self.is_reading_source:
@@ -913,11 +925,17 @@ class TranslateTab(UIToolbarTab):
                     # Ẩn section Quản lý Audio Segments khi chuyển đổi
                     if hasattr(self, 'segment_manager_group'):
                         self.segment_manager_group.setVisible(False)
+                    # Enable combobox TTS nguồn
+                    self.source_tts_lang_combo.setEnabled(True)
+                    # Xóa dữ liệu tạm khi chuyển đổi
+                    clean_all_temp_parts()
                 
                 # Bắt đầu đọc văn bản đích
                 self.is_reading_target = True
                 self.read_target_btn.setText("🔇 Tắt đọc văn bản đích")
                 self.read_target_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
+                # Disable combobox TTS đích khi đang đọc
+                self.target_tts_lang_combo.setEnabled(False)
             
             # Lấy voice từ combobox TTS
             if text_type == "source":
@@ -926,7 +944,7 @@ class TranslateTab(UIToolbarTab):
                 selected_voice = self.target_tts_lang_combo.currentText()
             
             # Xử lý voice được chọn
-            if selected_voice == "Tự phát hiện (ưu tiên nữ)":
+            if selected_voice == "Tự phát hiện":
                 # Sử dụng langdetect để tự động phát hiện
                 detected_lang = self.detect_language_from_text(text)
                 voice_name = self.get_female_voice(detected_lang) or self.get_default_voice_for_language(detected_lang)
@@ -1009,10 +1027,17 @@ class TranslateTab(UIToolbarTab):
                 self.is_reading_source = False
                 self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
                 self.read_source_btn.setStyleSheet("")
+                # Enable combobox TTS nguồn khi dừng đọc
+                self.source_tts_lang_combo.setEnabled(True)
             else:
                 self.is_reading_target = False
                 self.read_target_btn.setText("🔊 Đọc văn bản đích")
                 self.read_target_btn.setStyleSheet("")
+                # Enable combobox TTS đích khi dừng đọc
+                self.target_tts_lang_combo.setEnabled(True)
+            
+            # Xóa dữ liệu tạm khi dừng đọc
+            clean_all_temp_parts()
             
             # Log
             self._add_log_item(f"⏹️ Đã dừng đọc văn bản {text_type}", "info")
@@ -1107,12 +1132,18 @@ class TranslateTab(UIToolbarTab):
             self.read_source_btn.setEnabled(True)
             self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
             self.read_source_btn.setStyleSheet("")
+            # Enable combobox TTS nguồn
+            if hasattr(self, 'source_tts_lang_combo'):
+                self.source_tts_lang_combo.setEnabled(True)
         
         # Chỉ reset nút target nếu không đang đọc
         if not self.is_reading_target:
             self.read_target_btn.setEnabled(True)
             self.read_target_btn.setText("🔊 Đọc văn bản đích")
             self.read_target_btn.setStyleSheet("")
+            # Enable combobox TTS đích
+            if hasattr(self, 'target_tts_lang_combo'):
+                self.target_tts_lang_combo.setEnabled(True)
 
     def _reset_all_read_buttons(self) -> None:
         """Reset tất cả nút đọc về trạng thái ban đầu (dùng khi đóng tab hoặc cần thiết)"""
@@ -1126,6 +1157,12 @@ class TranslateTab(UIToolbarTab):
         self.read_target_btn.setEnabled(True)
         self.read_target_btn.setText("🔊 Đọc văn bản đích")
         self.read_target_btn.setStyleSheet("")
+        
+        # Enable tất cả combobox TTS
+        if hasattr(self, 'source_tts_lang_combo'):
+            self.source_tts_lang_combo.setEnabled(True)
+        if hasattr(self, 'target_tts_lang_combo'):
+            self.target_tts_lang_combo.setEnabled(True)
 
     def _on_audio_position_changed(self, position_ms: int) -> None:
         """Callback khi vị trí audio thay đổi"""
@@ -1192,20 +1229,35 @@ class TranslateTab(UIToolbarTab):
             self.read_source_btn.setEnabled(True)
             self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
             self.read_source_btn.setStyleSheet("")
+            # Enable combobox TTS nguồn
+            if hasattr(self, 'source_tts_lang_combo'):
+                self.source_tts_lang_combo.setEnabled(True)
         
         if not self.is_reading_target:
             self.read_target_btn.setEnabled(True)
             self.read_target_btn.setText("🔊 Đọc văn bản đích")
             self.read_target_btn.setStyleSheet("")
+            # Enable combobox TTS đích
+            if hasattr(self, 'target_tts_lang_combo'):
+                self.target_tts_lang_combo.setEnabled(True)
+        
+        # Xóa dữ liệu tạm khi dừng dịch thuật
+        clean_all_temp_parts()
         
         self.stop_button.setEnabled(False)
         self._add_log_item("⏹ Đã dừng dịch thuật")
 
     def clear_results(self) -> None:
         """Xóa kết quả dịch"""
+        # Clear audio và reset nút đọc khi xóa kết quả
+        self._clear_audio_and_reset_buttons()
+        
+        # Clear kết quả dịch
         self.output_text.clear()
         self.translated_segments.clear()
-        self._add_log_item("🗑️ Đã xóa kết quả")
+        
+        # Log thông báo
+        self._add_log_item("🗑️ Đã xóa kết quả và clear audio")
 
     def _on_translation_complete(self) -> None:
         """Xử lý khi hoàn thành dịch thuật"""
@@ -1355,6 +1407,9 @@ class TranslateTab(UIToolbarTab):
             
             # Reset tất cả nút đọc về trạng thái ban đầu
             self._reset_all_read_buttons()
+            
+            # Xóa dữ liệu tạm khi đóng tab
+            clean_all_temp_parts()
                 
         except Exception as e:
             print(f"Warning: Error in closeEvent: {e}")
@@ -1365,7 +1420,7 @@ class TranslateTab(UIToolbarTab):
         """Xóa các file audio tạm thời"""
         try:
             # Xóa file audio tạm từ TTS
-            from app.utils.helps import clean_all_temp_parts
+          
             clean_all_temp_parts()
             
             # Xóa file gap nếu có
@@ -1394,6 +1449,74 @@ class TranslateTab(UIToolbarTab):
                 
         except Exception as e:
             print(f"❌ Lỗi khi ghi log vào file: {str(e)}")
+    
+    def _clear_audio_and_reset_buttons(self) -> None:
+        """Clear audio và reset nút đọc khi bắt đầu dịch"""
+        try:
+            # Dừng audio player nếu đang phát
+            if hasattr(self, 'audio_player') and self.audio_player:
+                self.audio_player.stop()
+            
+            # Dừng TTS worker nếu đang chạy
+            if hasattr(self, 'tts_worker') and self.tts_worker and self.tts_worker.isRunning():
+                self.tts_worker.stop()
+                self.tts_worker.wait(3000)
+            
+            # Clear segment manager
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                self.segment_manager.clear_segments()
+            
+            # Ẩn section Quản lý Audio Segments
+            if hasattr(self, 'segment_manager_group'):
+                self.segment_manager_group.setVisible(False)
+            
+            # Reset tất cả nút đọc về trạng thái ban đầu
+            self._reset_all_read_buttons()
+            
+            # Xóa dữ liệu tạm
+            clean_all_temp_parts()
+            
+            # Log thông báo
+            self._add_log_item("🧹 Đã clear audio và reset nút đọc để bắt đầu dịch mới", "info")
+            
+        except Exception as e:
+            print(f"Warning: Error in _clear_audio_and_reset_buttons: {e}")
+
+    def _on_source_text_changed(self):
+        """Callback khi văn bản nguồn thay đổi - clear dữ liệu đích và reset nút đọc"""
+        try:
+            # Clear output text
+            self.output_text.clear()
+            
+            # Clear translated segments
+            if hasattr(self, 'translated_segments'):
+                self.translated_segments.clear()
+            
+            # Clear segment manager nếu có
+            if hasattr(self, 'segment_manager') and self.segment_manager:
+                self.segment_manager.clear_segments()
+            
+            # Ẩn section Quản lý Audio Segments
+            if hasattr(self, 'segment_manager_group'):
+                self.segment_manager_group.setVisible(False)
+            
+            # Dừng audio player nếu đang phát
+            if hasattr(self, 'audio_player') and self.audio_player:
+                self.audio_player.stop()
+            
+            # Reset progress nếu có
+            if hasattr(self, '_reset_progress'):
+                self._reset_progress()
+            
+            # Reset tất cả nút đọc về trạng thái ban đầu
+            self._reset_all_read_buttons()
+            
+            # Log thông báo
+            self._add_log_item("🔄 Văn bản nguồn đã thay đổi - đã xóa dữ liệu đích và reset nút đọc", "info")
+            
+        except Exception as e:
+            print(f"Warning: Error in _on_source_text_changed: {e}")
+
     def _on_playback_started(self):
         """Callback khi bắt đầu phát từ 0:00"""
         print("Playback started from 0:00")
@@ -1577,7 +1700,7 @@ class TranslateTab(UIToolbarTab):
             self.source_tts_lang_combo.clear()
             
             # Thêm option "Tự phát hiện"
-            self.source_tts_lang_combo.addItem("Tự phát hiện (ưu tiên nữ)")
+            self.source_tts_lang_combo.addItem("Tự phát hiện")
             
             # Lấy ngôn ngữ nguồn hiện tại
             source_lang = self.source_lang_combo.currentText()
@@ -1590,7 +1713,7 @@ class TranslateTab(UIToolbarTab):
                         self.source_tts_lang_combo.addItem(voice["label"])
             
             # Đặt lại selection
-            self.source_tts_lang_combo.setCurrentText("Tự phát hiện (ưu tiên nữ)")
+            self.source_tts_lang_combo.setCurrentText("Tự phát hiện")
             
         except Exception as e:
             print(f"Error populating source voices: {e}")
@@ -1601,7 +1724,7 @@ class TranslateTab(UIToolbarTab):
             self.target_tts_lang_combo.clear()
             
             # Thêm option "Tự phát hiện"
-            self.target_tts_lang_combo.addItem("Tự phát hiện (ưu tiên nữ)")
+            self.target_tts_lang_combo.addItem("Tự phát hiện")
             
             # Lấy ngôn ngữ đích hiện tại
             target_lang = self.target_lang_combo.currentText()
@@ -1614,7 +1737,7 @@ class TranslateTab(UIToolbarTab):
                         self.target_tts_lang_combo.addItem(voice["label"])
             
             # Đặt lại selection
-            self.target_tts_lang_combo.setCurrentText("Tự phát hiện (ưu tiên nữ)")
+            self.target_tts_lang_combo.setCurrentText("Tự phát hiện")
             
         except Exception as e:
             print(f"Error populating target voices: {e}")

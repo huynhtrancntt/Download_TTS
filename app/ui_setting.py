@@ -199,6 +199,12 @@ def get_input_styles():
         QLineEdit:hover {{
             border: 1px solid {COLORS['success_green']};
         }}
+        
+        /* Tắt màu tô đen khi chọn text */
+        QTextEdit::selection, QLineEdit::selection {{
+            background-color: transparent;
+            color: {COLORS['text_primary']};
+        }}
     """
 
 
@@ -642,6 +648,12 @@ def get_scrollbar_styles():
         }}
         QListWidget QScrollBar::handle:vertical:hover, QTextEdit QScrollBar::handle:vertical:hover {{
             background: {COLORS['accent_blue']};
+        }}
+        
+        /* Tắt màu tô đen khi chọn text trong QTextEdit */
+        QTextEdit::selection {{
+            background-color: transparent;
+            color: {COLORS['text_primary']};
         }}
     """
 

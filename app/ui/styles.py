@@ -67,6 +67,10 @@ class AppStyles:
         QLineEdit:focus, QTextEdit:focus {{
             border: 2px solid {COLORS['accent']};       /* Viền khi focus - màu vàng */
         }}
+        QLineEdit::selection, QTextEdit::selection {{
+            background-color: transparent;              /* Tắt màu nền khi chọn text */
+            color: {COLORS['text_primary']};            /* Giữ màu chữ khi chọn */
+        }}
     """
     
     # Style cho combo box (dropdown)
