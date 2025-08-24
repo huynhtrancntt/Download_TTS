@@ -25,36 +25,31 @@ from app.workers.translate_workers import MultiThreadTranslateWorker, BatchTrans
 from app.core.audio_player import AudioPlayer
 from app.workers.TTS_workers import MTProducerWorker
 from app.core.segment_manager import SegmentManager
+from app.core.voices_data import voices_data
 
 
-LANGS = [
-    ("Tự phát hiện", "auto"),
-    ("Tiếng Việt", "vi"),
-    ("Tiếng Anh", "en"),
-    ("Tiếng Nhật", "ja"),
-    ("Tiếng Trung", "zh-CN"),
-    ("Tiếng Hàn", "ko"),
-    ("Tiếng Pháp", "fr"),
-    ("Tiếng Đức", "de"),
-    ("Tiếng Tây Ban Nha", "es"),
-    ("Tiếng Bồ Đào Nha", "pt"),
-    ("Tiếng Thái", "th"),
-    ("Tiếng Nga", "ru"),
-    ("Tiếng Ý", "it"),
-]
+# Tạo danh sách ngôn ngữ từ voices_data
+LANGS = [("Tự phát hiện", "auto")] + [(voices_data[lang]["display_name"], lang) for lang in voices_data.keys()]
 
 
 def code_by_name(name: str) -> str:
-    for n, c in LANGS:
-        if n == name:
-            return c
+    """Lấy mã ngôn ngữ từ tên hiển thị"""
+    if name == "Tự phát hiện":
+        return "auto"
+    
+    for lang_code, lang_data in voices_data.items():
+        if lang_data["display_name"] == name:
+            return lang_code
     return "auto"
 
 
 def name_by_code(code: str) -> str:
-    for n, c in LANGS:
-        if c.lower() == code.lower():
-            return n
+    """Lấy tên hiển thị từ mã ngôn ngữ"""
+    if code.lower() == "auto":
+        return "Tự phát hiện"
+    
+    if code.lower() in voices_data:
+        return voices_data[code.lower()]["display_name"]
     return code
 
 class TranslateTab(UIToolbarTab):
@@ -71,6 +66,10 @@ class TranslateTab(UIToolbarTab):
         default_service = "Google Translate"
         self.service_combo.setCurrentText(default_service)
         self._on_service_changed(default_service)
+        
+        # Đồng bộ TTS combobox với ngôn ngữ dịch ban đầu
+        # Delay một chút để đảm bảo UI đã được thiết lập hoàn toàn
+        QTimer.singleShot(100, self._sync_tts_with_translation_languages)
 
     def _initialize_state_variables(self) -> None:
         # Thêm worker và các biến trạng thái
@@ -183,12 +182,22 @@ class TranslateTab(UIToolbarTab):
         self.input_text.setMinimumHeight(200)
         self.input_text.setPlaceholderText("Nhập văn bản cần dịch vào đây...")
         
-        # Thêm nút đọc văn bản nguồn
+        # Thêm nút đọc văn bản nguồn và combobox ngôn ngữ
         input_button_layout = QHBoxLayout()
         self.read_source_btn = QPushButton("🔊 Đọc văn bản nguồn")
         self.read_source_btn.clicked.connect(self._read_source_text)
         self.read_source_btn.setObjectName("btn_style_1")
         input_button_layout.addWidget(self.read_source_btn)
+        
+        # Combobox chọn voice cho văn bản nguồn
+        self.source_tts_lang_combo = QComboBox()
+        self.source_tts_lang_combo.setFixedWidth(150)
+        self.source_tts_lang_combo.setFixedHeight(30)
+        self.source_tts_lang_combo.setCurrentText("Tự phát hiện")
+        # Populate voices khi khởi tạo
+        # Delay để đảm bảo combobox đã được thiết lập
+        QTimer.singleShot(50, self._populate_source_voices)
+        input_button_layout.addWidget(self.source_tts_lang_combo)
 
         input_button_layout.addStretch()
         
@@ -211,6 +220,17 @@ class TranslateTab(UIToolbarTab):
         self.read_target_btn.clicked.connect(self._read_target_text)
         self.read_target_btn.setObjectName("btn_style_1")
         input_button_layout_target.addWidget(self.read_target_btn)
+        
+        # Combobox chọn voice cho văn bản đích
+        self.target_tts_lang_combo = QComboBox()
+        self.target_tts_lang_combo.setFixedWidth(150)
+        self.target_tts_lang_combo.setFixedHeight(30)
+        self.target_tts_lang_combo.setCurrentText("Tự phát hiện")
+        # Populate voices khi khởi tạo
+        # Delay để đảm bảo combobox đã được thiết lập
+        QTimer.singleShot(50, self._populate_target_voices)
+        input_button_layout_target.addWidget(self.target_tts_lang_combo)
+        
         input_button_layout_target.addStretch()
         output_layout.addWidget(self.output_text)
         output_layout.addLayout(input_button_layout_target)
@@ -270,10 +290,16 @@ class TranslateTab(UIToolbarTab):
 
         # Cột 2: Combobox Ngôn ngữ nguồn
         self.source_lang_combo = QComboBox()
-        self.source_lang_combo.addItems([n for n, _ in LANGS])
+        # Sử dụng method helper để lấy danh sách ngôn ngữ
+        languages = self.get_available_languages()
+        self.source_lang_combo.addItems([n for n, _ in languages])
         self.source_lang_combo.setFixedHeight(30)
         # Đặt độ rộng cố định giống service_combo
         self.source_lang_combo.setFixedWidth(150)
+        # Đặt ngôn ngữ nguồn mặc định là Tự phát hiện
+        self.source_lang_combo.setCurrentText("Tự phát hiện")
+        # Kết nối signal để tự động cập nhật TTS combobox
+        self.source_lang_combo.currentTextChanged.connect(self._on_source_lang_changed)
         second_row.addWidget(self.source_lang_combo)
 
         # Cột 3: Label Ngôn ngữ đích
@@ -283,11 +309,13 @@ class TranslateTab(UIToolbarTab):
 
         # Cột 4: Combobox Ngôn ngữ đích
         self.target_lang_combo = QComboBox()
-        self.target_lang_combo.addItems([n for n, _ in LANGS])
+        # Sử dụng method helper để lấy danh sách ngôn ngữ
+        languages = self.get_available_languages()
+        self.target_lang_combo.addItems([n for n, _ in languages])
         self.target_lang_combo.setCurrentText("Tiếng Anh")
-        self.target_lang_combo.setFixedHeight(30)
-        # Đặt độ rộng cố định giống source_lang_combo
         self.target_lang_combo.setFixedWidth(150)
+        # Kết nối signal để tự động cập nhật TTS combobox
+        self.target_lang_combo.currentTextChanged.connect(self._on_target_lang_changed)
         second_row.addWidget(self.target_lang_combo)
 
         second_row.addStretch()  # Đẩy sang trái
@@ -295,12 +323,6 @@ class TranslateTab(UIToolbarTab):
 
         # Hàng 3: Batch mode và các tham số
         third_row = QHBoxLayout()
-        
-        # Cột 1: Checkbox Batch mode
-        self.batch_mode_checkbox = QCheckBox("Chế độ hàng loạt")
-        self.batch_mode_checkbox.setFixedWidth(120)
-        self.batch_mode_checkbox.toggled.connect(self._on_batch_mode_toggled)
-        third_row.addWidget(self.batch_mode_checkbox)
         
         # Cột 2: Label Max Length
         max_len_label = QLabel("Độ dài tối đa:")
@@ -857,19 +879,83 @@ class TranslateTab(UIToolbarTab):
             if hasattr(self, 'segment_manager_group'):
                 self.segment_manager_group.setVisible(True)
             
-            # Cập nhật trạng thái nút đọc
+            # Dừng đọc văn bản cũ trước khi bắt đầu đọc văn bản mới
             if text_type == "source":
+                # Nếu đang đọc văn bản đích, dừng nó trước
+                if self.is_reading_target:
+                    self.is_reading_target = False
+                    self.read_target_btn.setText("🔊 Đọc văn bản đích")
+                    self.read_target_btn.setStyleSheet("")
+                    # Dừng audio và xóa segments cũ
+                    if self.audio_player:
+                        self.audio_player.stop()
+                    if hasattr(self, 'segment_manager') and self.segment_manager:
+                        self.segment_manager.clear_segments()
+                    # Ẩn section Quản lý Audio Segments khi chuyển đổi
+                    if hasattr(self, 'segment_manager_group'):
+                        self.segment_manager_group.setVisible(False)
+                
+                # Bắt đầu đọc văn bản nguồn
                 self.is_reading_source = True
                 self.read_source_btn.setText("🔇 Tắt đọc văn bản nguồn")
                 self.read_source_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
-            else:
+            else:  # target
+                # Nếu đang đọc văn bản nguồn, dừng nó trước
+                if self.is_reading_source:
+                    self.is_reading_source = False
+                    self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+                    self.read_source_btn.setStyleSheet("")
+                    # Dừng audio và xóa segments cũ
+                    if self.audio_player:
+                        self.audio_player.stop()
+                    if hasattr(self, 'segment_manager') and self.segment_manager:
+                        self.segment_manager.clear_segments()
+                    # Ẩn section Quản lý Audio Segments khi chuyển đổi
+                    if hasattr(self, 'segment_manager_group'):
+                        self.segment_manager_group.setVisible(False)
+                
+                # Bắt đầu đọc văn bản đích
                 self.is_reading_target = True
                 self.read_target_btn.setText("🔇 Tắt đọc văn bản đích")
                 self.read_target_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
             
+            # Lấy voice từ combobox TTS
+            if text_type == "source":
+                selected_voice = self.source_tts_lang_combo.currentText()
+            else:  # target
+                selected_voice = self.target_tts_lang_combo.currentText()
+            
+            # Xử lý voice được chọn
+            if selected_voice == "Tự phát hiện (ưu tiên nữ)":
+                # Sử dụng langdetect để tự động phát hiện
+                detected_lang = self.detect_language_from_text(text)
+                voice_name = self.get_female_voice(detected_lang) or self.get_default_voice_for_language(detected_lang)
+                lang_display_name = self.get_language_display_name(detected_lang)
+                self._add_log_item(f"🔍 Phát hiện ngôn ngữ: {lang_display_name} ({detected_lang})", "info")
+                print(f"🔍 Detected language: {detected_lang}, Voice: {voice_name}")
+            else:
+                # Lấy voice name từ label (ví dụ: "Nữ - HoaiMy (vi-VN-HoaiMyNeural)")
+                voice_name = self._extract_voice_name_from_label(selected_voice)
+                if voice_name:
+                    self._add_log_item(f"🎯 Sử dụng voice: {selected_voice}", "info")
+                    print(f"🎯 Selected voice: {voice_name}")
+                else:
+                    # Fallback: sử dụng ngôn ngữ từ combobox dịch
+                    if text_type == "source":
+                        lang_code = code_by_name(self.source_lang_combo.currentText())
+                    else:
+                        lang_code = code_by_name(self.target_lang_combo.currentText())
+                    
+                    if lang_code != "auto":
+                        voice_name = self.get_female_voice(lang_code) or self.get_default_voice_for_language(lang_code)
+                        lang_display_name = self.get_language_display_name(lang_code)
+                        self._add_log_item(f"🎯 Fallback voice: {lang_display_name} ({lang_code})", "info")
+                    else:
+                        voice_name = "vi-VN-HoaiMyNeural"  # Default Vietnamese
+                        self._add_log_item("🎯 Fallback voice: Tiếng Việt (vi)", "info")
             # Tạo TTS worker
             self.tts_worker = MTProducerWorker(
-                text, "vi-VN-HoaiMyNeural", 0, 0, 500, 4
+                text, voice_name, 0, 0, 500, 4
             )
             
             # Kết nối signals
@@ -887,7 +973,15 @@ class TranslateTab(UIToolbarTab):
             
         except Exception as e:
             self._add_log_item(f"❌ Lỗi khi bắt đầu TTS: {e}", "error")
-            self._reset_read_buttons()
+            # Chỉ reset nút tương ứng khi có lỗi
+            if text_type == "source":
+                self.is_reading_source = False
+                self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+                self.read_source_btn.setStyleSheet("")
+            else:  # target
+                self.is_reading_target = False
+                self.read_target_btn.setText("🔊 Đọc văn bản đích")
+                self.read_target_btn.setStyleSheet("")
 
     def _stop_tts_reading(self, text_type: str) -> None:
         """Dừng đọc văn bản bằng TTS và xóa segments"""
@@ -1003,14 +1097,35 @@ class TranslateTab(UIToolbarTab):
     def _on_tts_error(self, msg: str) -> None:
         """Callback khi TTS có lỗi"""
         self._add_log_item(f"❌ Lỗi TTS: {msg}", "error")
-        self._reset_read_buttons()
+        # Không reset buttons ở đây để tránh ảnh hưởng đến nút đang đọc
+        # Chỉ log lỗi, giữ nguyên trạng thái buttons
 
     def _reset_read_buttons(self) -> None:
-        """Reset trạng thái các nút đọc"""
+        """Reset trạng thái các nút đọc - chỉ reset nút không đang đọc"""
+        # Chỉ reset nút source nếu không đang đọc
+        if not self.is_reading_source:
+            self.read_source_btn.setEnabled(True)
+            self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+            self.read_source_btn.setStyleSheet("")
+        
+        # Chỉ reset nút target nếu không đang đọc
+        if not self.is_reading_target:
+            self.read_target_btn.setEnabled(True)
+            self.read_target_btn.setText("🔊 Đọc văn bản đích")
+            self.read_target_btn.setStyleSheet("")
+
+    def _reset_all_read_buttons(self) -> None:
+        """Reset tất cả nút đọc về trạng thái ban đầu (dùng khi đóng tab hoặc cần thiết)"""
+        self.is_reading_source = False
+        self.is_reading_target = False
+        
         self.read_source_btn.setEnabled(True)
         self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+        self.read_source_btn.setStyleSheet("")
+        
         self.read_target_btn.setEnabled(True)
         self.read_target_btn.setText("🔊 Đọc văn bản đích")
+        self.read_target_btn.setStyleSheet("")
 
     def _on_audio_position_changed(self, position_ms: int) -> None:
         """Callback khi vị trí audio thay đổi"""
@@ -1071,8 +1186,17 @@ class TranslateTab(UIToolbarTab):
             except:
                 pass
         
-        # Reset trạng thái các nút đọc
-        self._reset_read_buttons()
+        # Reset trạng thái các nút đọc khi dừng dịch thuật
+        # Chỉ reset nút không đang đọc để tránh ảnh hưởng đến nút đang đọc
+        if not self.is_reading_source:
+            self.read_source_btn.setEnabled(True)
+            self.read_source_btn.setText("🔊 Đọc văn bản nguồn")
+            self.read_source_btn.setStyleSheet("")
+        
+        if not self.is_reading_target:
+            self.read_target_btn.setEnabled(True)
+            self.read_target_btn.setText("🔊 Đọc văn bản đích")
+            self.read_target_btn.setStyleSheet("")
         
         self.stop_button.setEnabled(False)
         self._add_log_item("⏹ Đã dừng dịch thuật")
@@ -1228,6 +1352,9 @@ class TranslateTab(UIToolbarTab):
             # Clear segment manager
             if hasattr(self, 'segment_manager'):
                 self.segment_manager.clear_segments()
+            
+            # Reset tất cả nút đọc về trạng thái ban đầu
+            self._reset_all_read_buttons()
                 
         except Exception as e:
             print(f"Warning: Error in closeEvent: {e}")
@@ -1270,10 +1397,224 @@ class TranslateTab(UIToolbarTab):
     def _on_playback_started(self):
         """Callback khi bắt đầu phát từ 0:00"""
         print("Playback started from 0:00")
-        btn
         # Thêm logic xử lý khi bắt đầu phát
 
     def _on_playback_stopped(self):
         """Callback khi dừng phát"""
         print("Playback stopped")
         # Thêm logic xử lý khi dừng phát
+
+    def get_voices_for_language(self, language_code: str) -> List[Dict]:
+        """Lấy danh sách voices cho một ngôn ngữ cụ thể"""
+        if language_code in voices_data:
+            return voices_data[language_code]["voices"]
+        return []
+
+    def get_language_display_name(self, language_code: str) -> str:
+        """Lấy tên hiển thị của ngôn ngữ từ mã ngôn ngữ"""
+        if language_code in voices_data:
+            return voices_data[language_code]["display_name"]
+        return language_code
+
+    def get_default_voice_for_language(self, language_code: str) -> str:
+        """Lấy voice mặc định cho một ngôn ngữ cụ thể"""
+        if language_code in voices_data and voices_data[language_code]["voices"]:
+            # Trả về voice đầu tiên (thường là voice mặc định)
+            return voices_data[language_code]["voices"][0]["shortname"]
+        return "vi-VN-HoaiMyNeural"  # Fallback to Vietnamese
+
+    def get_available_languages(self) -> List[Tuple[str, str]]:
+        """Lấy danh sách tất cả ngôn ngữ có sẵn với mã và tên hiển thị"""
+        return [("Tự phát hiện", "auto")] + [(voices_data[lang]["display_name"], lang) for lang in voices_data.keys()]
+
+    def get_language_by_code(self, code: str) -> Optional[str]:
+        """Lấy tên hiển thị của ngôn ngữ từ mã ngôn ngữ"""
+        if code == "auto":
+            return "Tự phát hiện"
+        if code in voices_data:
+            return voices_data[code]["display_name"]
+        return None
+
+    def get_voice_info(self, voice_name: str) -> Optional[Dict]:
+        """Lấy thông tin chi tiết về một voice cụ thể"""
+        for lang_code, lang_data in voices_data.items():
+            for voice in lang_data["voices"]:
+                if voice["shortname"] == voice_name:
+                    return {
+                        "language": lang_data["display_name"],
+                        "language_code": lang_code,
+                        "gender": voice["gender"],
+                        "shortname": voice["shortname"],
+                        "label": voice["label"]
+                    }
+        return None
+
+    def get_voices_by_gender(self, language_code: str, gender: str = None) -> List[Dict]:
+        """Lấy danh sách voices theo ngôn ngữ và giới tính (nếu có)"""
+        if language_code not in voices_data:
+            return []
+        
+        voices = voices_data[language_code]["voices"]
+        if gender:
+            return [v for v in voices if v["gender"] == gender]
+        return voices
+
+    def get_all_language_codes(self) -> List[str]:
+        """Lấy danh sách tất cả mã ngôn ngữ có sẵn"""
+        return list(voices_data.keys())
+
+    def get_language_count(self) -> int:
+        """Lấy tổng số ngôn ngữ có sẵn"""
+        return len(voices_data)
+
+    def is_language_supported(self, language_code: str) -> bool:
+        """Kiểm tra xem một ngôn ngữ có được hỗ trợ không"""
+        return language_code in voices_data
+
+    def get_voice_by_gender(self, language_code: str, gender: str) -> Optional[str]:
+        """Lấy voice theo giới tính cho một ngôn ngữ cụ thể"""
+        if language_code not in voices_data:
+            return None
+        
+        for voice in voices_data[language_code]["voices"]:
+            if voice["gender"] == gender:
+                return voice["shortname"]
+        return None
+
+    def get_male_voice(self, language_code: str) -> Optional[str]:
+        """Lấy voice nam cho một ngôn ngữ cụ thể"""
+        return self.get_voice_by_gender(language_code, "Nam")
+
+    def get_female_voice(self, language_code: str) -> Optional[str]:
+        """Lấy voice nữ cho một ngôn ngữ cụ thể"""
+        return self.get_voice_by_gender(language_code, "Nữ")
+
+    def detect_language_from_text(self, text: str) -> str:
+        """Tự động phát hiện ngôn ngữ từ văn bản sử dụng langdetect"""
+        try:
+            if not text.strip():
+                return "vi"  # Default to Vietnamese
+            
+            # Sử dụng langdetect để phát hiện ngôn ngữ
+            detected_lang = detect(text)
+            
+            # Mapping một số mã ngôn ngữ phổ biến
+            lang_mapping = {
+                "zh-cn": "zh",  # Chinese simplified
+                "zh-tw": "zh",  # Chinese traditional
+            }
+            
+            detected_lang = lang_mapping.get(detected_lang, detected_lang)
+            
+            # Kiểm tra xem ngôn ngữ có được hỗ trợ không
+            if self.is_language_supported(detected_lang):
+                return detected_lang
+            else:
+                # Fallback to Vietnamese if not supported
+                return "vi"
+                
+        except Exception as e:
+            print(f"Error detecting language: {e}")
+            return "vi"  # Fallback to Vietnamese
+
+    def _on_source_lang_changed(self, lang_name: str) -> None:
+        """Callback khi thay đổi ngôn ngữ nguồn"""
+        try:
+            # Populate voices mới cho TTS combobox
+            self._populate_source_voices()
+        except Exception as e:
+            print(f"Error updating source TTS language: {e}")
+
+    def _on_target_lang_changed(self, lang_name: str) -> None:
+        """Callback khi thay đổi ngôn ngữ đích"""
+        try:
+            # Populate voices mới cho TTS combobox
+            self._populate_target_voices()
+        except Exception as e:
+            print(f"Error updating target TTS language: {e}")
+
+    def _sync_tts_with_translation_languages(self) -> None:
+        """Đồng bộ TTS combobox với ngôn ngữ dịch ban đầu"""
+        try:
+            # Populate voices cho cả source và target
+            if hasattr(self, 'source_tts_lang_combo'):
+                self._populate_source_voices()
+            
+            if hasattr(self, 'target_tts_lang_combo'):
+                self._populate_target_voices()
+                
+        except Exception as e:
+            print(f"Error syncing TTS languages: {e}")
+
+    def _extract_voice_name_from_label(self, voice_label: str) -> Optional[str]:
+        """Trích xuất voice name từ label (ví dụ: "Nữ - HoaiMy (vi-VN-HoaiMyNeural)" -> "vi-VN-HoaiMyNeural")"""
+        try:
+            # Tìm voice name trong dấu ngoặc đơn
+            if "(" in voice_label and ")" in voice_label:
+                start = voice_label.find("(") + 1
+                end = voice_label.find(")")
+                if start < end:
+                    voice_name = voice_label[start:end]
+                    # Kiểm tra xem có phải voice name hợp lệ không
+                    if "-" in voice_name and "Neural" in voice_name:
+                        return voice_name
+            
+            # Nếu không tìm thấy, tìm trong voices_data
+            for lang_code, lang_data in voices_data.items():
+                for voice in lang_data["voices"]:
+                    if voice["label"] == voice_label:
+                        return voice["shortname"]
+            
+            return None
+            
+        except Exception as e:
+            print(f"Error extracting voice name: {e}")
+            return None
+
+    def _populate_source_voices(self) -> None:
+        """Populate source TTS combobox với voices của ngôn ngữ nguồn"""
+        try:
+            self.source_tts_lang_combo.clear()
+            
+            # Thêm option "Tự phát hiện"
+            self.source_tts_lang_combo.addItem("Tự phát hiện (ưu tiên nữ)")
+            
+            # Lấy ngôn ngữ nguồn hiện tại
+            source_lang = self.source_lang_combo.currentText()
+            if source_lang != "Tự phát hiện":
+                lang_code = code_by_name(source_lang)
+                if lang_code in voices_data:
+                    # Thêm tất cả voices của ngôn ngữ này
+                    voices = voices_data[lang_code]["voices"]
+                    for voice in voices:
+                        self.source_tts_lang_combo.addItem(voice["label"])
+            
+            # Đặt lại selection
+            self.source_tts_lang_combo.setCurrentText("Tự phát hiện (ưu tiên nữ)")
+            
+        except Exception as e:
+            print(f"Error populating source voices: {e}")
+
+    def _populate_target_voices(self) -> None:
+        """Populate target TTS combobox với voices của ngôn ngữ đích"""
+        try:
+            self.target_tts_lang_combo.clear()
+            
+            # Thêm option "Tự phát hiện"
+            self.target_tts_lang_combo.addItem("Tự phát hiện (ưu tiên nữ)")
+            
+            # Lấy ngôn ngữ đích hiện tại
+            target_lang = self.target_lang_combo.currentText()
+            if target_lang != "Tự phát hiện":
+                lang_code = code_by_name(target_lang)
+                if lang_code in voices_data:
+                    # Thêm tất cả voices của ngôn ngữ này
+                    voices = voices_data[lang_code]["voices"]
+                    for voice in voices:
+                        self.target_tts_lang_combo.addItem(voice["label"])
+            
+            # Đặt lại selection
+            self.target_tts_lang_combo.setCurrentText("Tự phát hiện (ưu tiên nữ)")
+            
+        except Exception as e:
+            print(f"Error populating target voices: {e}")
