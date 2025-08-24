@@ -1233,5 +1233,31 @@
         "started_at": "2025-08-24T15:30:25.330914",
         "finished_at": "2025-08-24T15:30:25.330914",
         "status": "success"
+    },
+    {
+        "input_file": "# 🚀 Hướng dẫn nhanh - Download TTS\n\n\n## ⚡ Cài đặt và chạy trong 5 phút\n\n\n### 1. Tải dự án\n```bash\ngit clone <repository-url>\ncd Download_TTS\n```\n\n\n### 2. Chạy cài đặt tự động (Windows)\n```bash\ninstall.bat\n```\n\n\n### 3. Hoặc cài đặt thủ công\n```bash\n# Tạo môi trường ảo\npython -m venv venv\n\n\n# Kích hoạt (Windows)\nvenv\\Scripts\\activate\n\n\n# Kích hoạt (Linux/Mac)\nsource venv/bin/activate\n\n\n# Cài đặt dependencies\npip install -r requirements.txt\n```\n\n\n### 4. Chạy ứng dụng\n```bash\npython main.py\n```\n\n\n## 🎯 Sử dụng cơ bản\n\n\n### Chuyển đổi văn bản thành giọng nói\n1. **Nhập văn bản**: Dán văn bản vào ô nhập liệu\n2. **Chọn ngôn ngữ**: Vietnamese, English, Japanese, etc.\n3. **Điều chỉnh tham số**: Tốc độ, cao độ, giới tính\n4. **Bấm \"Chuyển đổi\"**: Bắt đầu xử lý TTS\n\n\n### Phát audio\n- **▶️ Play/Pause**: Bắt đầu/dừng phát\n- **⏮/⏭**: Chuyển đoạn trước/sau\n- **Timeline**: Click vào slider để seek nhanh\n- **🔁 Lặp lại**: Bật/tắt chế độ lặp\n\n\n### Xuất file MP3\n1. **Chờ xử lý xong**: Tất cả segments hoàn thành\n2. **Bấm \"Lưu\"**: Chọn nơi lưu file MP3\n3. **Chờ ghép file**: Tự động ghép các đoạn\n\n\n## ⚙️ Cài đặt quan trọng",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-NamMinhNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 5,
+        "started_at": "2025-08-24T15:42:22.729577",
+        "finished_at": "2025-08-24T15:42:22.729577",
+        "status": "success"
+    },
+    {
+        "input_file": "# 🚀 Hướng dẫn nhanh - Download TTS\n\n\n## ⚡ Cài đặt và chạy trong 5 phút\n\n\n### 1. Tải dự án\n```bash\ngit clone <repository-url>\ncd Download_TTS\n```\n\n\n### 2. Chạy cài đặt tự động (Windows)\n```bash\ninstall.bat\n```\n\n\n### 3. Hoặc cài đặt thủ công\n```bash\n# Tạo môi trường ảo\npython -m venv venv\n\n\n# Kích hoạt (Windows)\nvenv\\Scripts\\activate\n\n\n# Kích hoạt (Linux/Mac)\nsource venv/bin/activate\n\n\n# Cài đặt dependencies\npip install -r requirements.txt\n```\n\n\n### 4. Chạy ứng dụng\n```bash\npython main.py\n```\n\n\n## 🎯 Sử dụng cơ bản\n\n\n### Chuyển đổi văn bản thành giọng nói\n1. **Nhập văn bản**: Dán văn bản vào ô nhập liệu\n2. **Chọn ngôn ngữ**: Vietnamese, English, Japanese, etc.\n3. **Điều chỉnh tham số**: Tốc độ, cao độ, giới tính\n4. **Bấm \"Chuyển đổi\"**: Bắt đầu xử lý TTS\n\n\n### Phát audio\n- **▶️ Play/Pause**: Bắt đầu/dừng phát\n- **⏮/⏭**: Chuyển đoạn trước/sau\n- **Timeline**: Click vào slider để seek nhanh\n- **🔁 Lặp lại**: Bật/tắt chế độ lặp\n\n\n### Xuất file MP3\n1. **Chờ xử lý xong**: Tất cả segments hoàn thành\n2. **Bấm \"Lưu\"**: Chọn nơi lưu file MP3\n3. **Chờ ghép file**: Tự động ghép các đoạn\n\n\n## ⚙️ Cài đặt quan trọng",
+        "output_file": "",
+        "media_type": "audio/mp3",
+        "voice": "vi-VN-HoaiMyNeural",
+        "rate_percent": 0,
+        "pitch_hz": 0,
+        "max_chunk_chars": 500,
+        "created_chunks": 5,
+        "started_at": "2025-08-24T15:42:52.766270",
+        "finished_at": "2025-08-24T15:42:52.766270",
+        "status": "success"
     }
 ]

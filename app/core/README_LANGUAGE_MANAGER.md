@@ -114,9 +114,11 @@ display_name = language_manager.name_by_code("en")
 # Kết quả: "Tiếng Anh"
 ```
 
-## Ví dụ sử dụng trong translate_tab.py
+## Ví dụ sử dụng trong các tabs
 
-### Trước (sử dụng hàm local và biến global):
+### 1. translate_tab.py
+
+#### Trước (sử dụng hàm local và biến global):
 
 ```python
 # Biến global
@@ -141,7 +143,7 @@ def _populate_source_voices(self):
                 self.source_tts_lang_combo.addItem(display_name)
 ```
 
-### Sau (sử dụng language_manager và self.languages):
+#### Sau (sử dụng language_manager và self.languages):
 
 ```python
 def _initialize_state_variables(self):
@@ -163,6 +165,71 @@ def _populate_source_voices(self):
             self.source_tts_lang_combo.addItem(voice)
     else:
         self.source_tts_lang_combo.addItem("Tự phát hiện")
+```
+
+### 2. tts_tab.py
+
+#### Trước (hardcode ngôn ngữ và giới tính):
+
+```python
+# Language combo box
+self.cmb_lang = QComboBox()
+for label, code in [
+    ("Vietnamese (vi)", "vi"), ("English US (en-US)", "en-US"),
+    ("English UK (en-GB)", "en-GB"), ("Japanese (ja)", "ja"),
+    # ... hardcode nhiều ngôn ngữ
+]:
+    self.cmb_lang.addItem(label, code)
+
+# Gender combo box
+self.cmb_gender = QComboBox()
+self.cmb_gender.addItems(["Female", "Male", "Any"])
+
+# TTS worker với voice cố định
+self.worker = MTProducerWorker(text, "vi-VN-HoaiMyNeural", 0, 0, 500, 4)
+```
+
+#### Sau (sử dụng language_manager):
+
+```python
+def _initialize_state_variables(self):
+    # Khởi tạo languages từ voices_data
+    self.languages = language_manager.get_available_languages()
+
+def _create_language_gender_controls(self):
+    # Language combo box - động từ voices_data
+    self.cmb_lang = QComboBox()
+    for display_name, lang_code in self.languages:
+        if lang_code != "auto":
+            self.cmb_lang.addItem(display_name, lang_code)
+    
+    # Gender combo box - cập nhật theo ngôn ngữ được chọn
+    self.cmb_gender = QComboBox()
+    self.cmb_gender.addItems(["Nữ", "Nam", "Bất kỳ"])
+    
+    # Kết nối signal để cập nhật voices
+    self.cmb_lang.currentTextChanged.connect(self._on_language_changed)
+
+def _on_language_changed(self, language_name: str):
+    # Cập nhật voices dựa trên ngôn ngữ được chọn
+    lang_code = language_manager.code_by_name(language_name)
+    voices = language_manager.get_voices_for_language(lang_code)
+    # Cập nhật combobox giới tính với voices thực tế
+
+def on_start(self):
+    # Lấy voice dựa trên ngôn ngữ và giới tính được chọn
+    selected_lang = self.cmb_lang.currentText()
+    selected_gender = self.cmb_gender.currentText()
+    
+    lang_code = language_manager.code_by_name(selected_lang)
+    if selected_gender == "Nữ":
+        voice_name = language_manager.get_female_voice(lang_code)
+    elif selected_gender == "Nam":
+        voice_name = language_manager.get_male_voice(lang_code)
+    else:
+        voice_name = language_manager.get_default_voice_for_language(lang_code)
+    
+    self.worker = MTProducerWorker(text, voice_name, 0, 0, 500, 4)
 ```
 
 ## Lợi ích

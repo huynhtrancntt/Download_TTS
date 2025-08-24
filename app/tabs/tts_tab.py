@@ -16,6 +16,8 @@ from typing import Optional
 from app.core.audio_player import AudioPlayer
 # Import SegmentManager
 from app.core.segment_manager import SegmentManager
+# Import LanguageManager
+from app.core.language_manager import language_manager
 
 import os
 from datetime import datetime
@@ -57,6 +59,12 @@ class TTSTab(UIToolbarTab):
 
         # Connect signals
         self._connect_signals()
+        
+        # Kết nối signal để cập nhật voices khi ngôn ngữ thay đổi
+        self.cmb_lang.currentTextChanged.connect(self._on_language_changed)
+        
+        # Cập nhật voices ban đầu cho ngôn ngữ mặc định
+        QTimer.singleShot(100, lambda: self._on_language_changed(self.cmb_lang.currentText()))
 
     def _initialize_state_variables(self) -> None:
         """Initialize state variables"""
@@ -67,6 +75,9 @@ class TTSTab(UIToolbarTab):
 
         # Initialize SegmentManager
         self.segment_manager = SegmentManager()
+        
+        # Language management
+        self.languages = language_manager.get_available_languages()
 
     def _setup_ui(self) -> None:
         """Setup UI"""
@@ -222,31 +233,38 @@ class TTSTab(UIToolbarTab):
         self._create_tts_control_buttons(content_layout)
 
     def _create_language_gender_controls(self, content_layout: QVBoxLayout) -> None:
-        """Create language and gender controls"""
+        """Create language and voice controls"""
         row_layout = QHBoxLayout()
 
         # Language combo box
         self.cmb_lang = QComboBox()
         self.cmb_lang.setMinimumWidth(120)
-        for label, code in [
-            ("Vietnamese (vi)", "vi"), ("English US (en-US)", "en-US"),
-            ("English UK (en-GB)", "en-GB"), ("Japanese (ja)", "ja"),
-            ("Korean (ko)", "ko"), ("Chinese (zh-CN)", "zh-CN"),
-            ("French (fr-FR)", "fr-FR"), ("German (de-DE)", "de-DE"),
-            ("Spanish (es-ES)", "es-ES"),
-        ]:
-            self.cmb_lang.addItem(label, code)
-        self.cmb_lang.setCurrentIndex(0)
+        # Sử dụng voices_data từ language_manager
+        vietnamese_index = 0  # Mặc định index 0
+        
+        # Thêm tất cả ngôn ngữ vào combobox
+        for i, (display_name, lang_code) in enumerate(self.languages):
+            if lang_code != "auto":  # Bỏ qua "Tự phát hiện"
+                self.cmb_lang.addItem(display_name, lang_code)
+        
+        # Tìm và đặt tiếng Việt làm mặc định
+        for i in range(self.cmb_lang.count()):
+            lang_code = self.cmb_lang.itemData(i)
+            if lang_code == "vi":
+                vietnamese_index = i
+                break
+        
+        # Đặt tiếng Việt làm mặc định
+        self.cmb_lang.setCurrentIndex(vietnamese_index)
 
-        # Gender combo box
+        # Voice combo box
         self.cmb_gender = QComboBox()
-        self.cmb_gender.setMinimumWidth(80)
-        self.cmb_gender.addItems(["Female", "Male", "Any"])
-        self.cmb_gender.setCurrentText("Female")
+        # self.cmb_gender.setMinimumWidth(120)  # Tăng width để hiển thị tên voice dài
+        # Sẽ được populate bởi _on_language_changed
 
         row_layout.addWidget(QLabel("Ngôn ngữ"))
         row_layout.addWidget(self.cmb_lang)
-        row_layout.addWidget(QLabel("Giới tính"))
+        row_layout.addWidget(QLabel("Voice"))
         row_layout.addWidget(self.cmb_gender)
         row_layout.addStretch()
 
@@ -590,6 +608,37 @@ class TTSTab(UIToolbarTab):
     #         except Exception:
     #             pass
     #         self.history.panel.add_history(text, meta=meta_payload)
+
+    def _on_language_changed(self, language_name: str) -> None:
+        """Callback when language selection changes"""
+        try:
+            # Lấy mã ngôn ngữ từ tên hiển thị
+            lang_code = language_manager.code_by_name(language_name)
+            if lang_code and lang_code != "auto":
+                # Lấy danh sách voices cho ngôn ngữ này
+                voices = language_manager.get_voices_for_language(lang_code)
+                if voices:
+                    # Cập nhật combobox với tất cả voices có sẵn
+                    self.cmb_gender.clear()
+                    
+                    # Thêm tất cả voices với tên hiển thị đẹp
+                    for voice in voices:
+                        # Lấy tên hiển thị ngắn gọn: "Nam - NamMinh" thay vì "Nam - NamMinh (vi-VN-NamMinhNeural)"
+                        display_name = language_manager.get_voice_display_name(voice["label"])
+                        self.cmb_gender.addItem(display_name, voice["shortname"])
+                    
+                    # Đặt mặc định là voice đầu tiên
+                    if self.cmb_gender.count() > 0:
+                        self.cmb_gender.setCurrentIndex(0)
+                        
+                    self._add_log_item(f"🔄 Đã cập nhật voices cho {language_name}: {len(voices)} voices", "info")
+                else:
+                    # Fallback nếu không có voices
+                    self.cmb_gender.clear()
+                    self.cmb_gender.addItem("Không có voices", "")
+                    self._add_log_item(f"⚠️ Không có voices cho {language_name}", "warning")
+        except Exception as e:
+            self._add_log_item(f"❌ Lỗi khi cập nhật voices: {e}", "error")
 
     def _on_break_duration_changed(self, duration_text: str) -> None:
         """Callback when break duration combo box changes"""
@@ -1164,9 +1213,28 @@ class TTSTab(UIToolbarTab):
                                 "Dán hoặc mở file .txt trước khi bắt đầu.")
             return
 
+        # Lấy voice được chọn trực tiếp từ combobox
+        selected_lang = self.cmb_lang.currentText()
+        selected_voice_display = self.cmb_gender.currentText()
+        selected_voice_shortname = self.cmb_gender.currentData()
+        
+        # Lấy mã ngôn ngữ
+        lang_code = language_manager.code_by_name(selected_lang)
+        
+        # Lấy voice từ shortname được lưu trong combobox
+        voice_name = selected_voice_shortname if selected_voice_shortname else None
+        
+        # Fallback nếu không có shortname (ví dụ: "Không có voices")
+        if not voice_name:
+            voice_name = "vi-VN-HoaiMyNeural"
+            self._add_log_item(f"⚠️ Không tìm thấy voice cho {selected_lang}, sử dụng mặc định", "warning")
+        
+        # Log voice được chọn
+        self._add_log_item(f"🎯 Voice được chọn: {voice_name} ({selected_lang} - {selected_voice_display})", "info")
+        
         # Create new worker
         self.worker = MTProducerWorker(
-            text, "vi-VN-HoaiMyNeural", 0, 0, 500, 4)
+            text, voice_name, 0, 0, 500, 4)
 
         # Connect signals
         self.worker.segment_ready.connect(self.on_segment_ready)
