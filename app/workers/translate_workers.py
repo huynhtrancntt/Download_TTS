@@ -16,15 +16,10 @@ import json
 
 from PySide6.QtCore import QThread, Signal
 
-from app.utils.helps import split_text, group_by_char_limit_with_len
+from app.utils.helps import split_text
 from deep_translator import GoogleTranslator
 import google.generativeai as genai
 import openai
-
-# Thêm import cần thiết ở đầu file
-from app.utils.audio_helpers import get_mp3_duration_ms
-
-# ==================== MultiThreadTranslateWorker - Worker đa luồng cho Tab Translate ====================
 
 class MultiThreadTranslateWorker(QThread):
     """
@@ -48,7 +43,8 @@ class MultiThreadTranslateWorker(QThread):
 
     def __init__(self, text: str, source_lang: str, target_lang: str, 
                  service: str, api_key: str, max_len: int, workers: int, 
-                 custom_prompt: str = "") -> None:
+                 custom_prompt: str = "", input_type: str = "text",
+                 chunks: Optional[List[str]] = None) -> None:
         """
         Khởi tạo worker dịch thuật đa luồng
 
@@ -73,6 +69,10 @@ class MultiThreadTranslateWorker(QThread):
         self.max_len: int = max_len
         self.workers: int = max(1, workers)  # Tối thiểu 1 worker
         self.custom_prompt: str = custom_prompt
+        # Kiểu đầu vào: "text" (mặc định) hoặc "srt" (không tách bằng split_text)
+        self.input_type: str = input_type
+        # Nếu đã có sẵn danh sách chunks, dùng trực tiếp (bỏ qua tách)
+        self.provided_chunks: Optional[List[str]] = chunks
         
         # Trạng thái worker
         self.stop_flag: bool = False
@@ -167,13 +167,18 @@ class MultiThreadTranslateWorker(QThread):
         Chia văn bản thành chunks và xử lý song song
         """
         try:
-            # Kiểm tra văn bản đầu vào
-            if not self.text.strip():
-                self.error.emit("❌ Chưa có nội dung văn bản để dịch.")
-                return
 
-            # 1) Tách ý (ý đơn) — dùng ngưỡng nhỏ hơn để ý không quá dài
-            ideas = split_text(self.text, self.max_len)
+
+            # 1) Xác định danh sách ý/chunks
+            if self.provided_chunks is not None:
+                ideas = list(self.provided_chunks)
+            else:
+                if self.input_type == "srt":
+                    # Giữ nguyên từng dòng theo SRT (không dùng split_text)
+                    ideas = self.text.split("\n")
+                else:
+                    # Văn bản thường: tách theo ý/câu
+                    ideas = split_text(self.text, self.max_len)
             
             # 2) Gộp ý thành cụm lớn hơn — giữ đúng thứ tự
             # grouped = group_by_char_limit_with_len(

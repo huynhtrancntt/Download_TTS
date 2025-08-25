@@ -24,6 +24,7 @@ from app.tabs.tts_tab import TTSTab
 from app.tabs.convert_tab import ConvertTab
 from app.tabs.downloadvideo_tab import DownloadVideoTab
 from app.tabs.translate_tab import TranslateTab
+from app.tabs.srt_tab import SRTTab
 # from app.tabs.downloadvideo_tab_1 import DownloadVideoTab1
 from app.uiToolbarTab import UIToolbarTab
 from app.ui_setting import _init_addStyle, resource_path
@@ -182,15 +183,17 @@ class MainWindow(QMainWindow):
         # Tạo tab Download Video
         self.tab_downloadvideo = DownloadVideoTab(self)
         self.tab_translate = TranslateTab(self)
+        self.tab_srt = SRTTab(self)
 
         # Lưu danh sách tất cả tabs để quản lý
-        self._all_tabs: List[UIToolbarTab] = [self.tab_tts,self.tab_downloadvideo, self.tab_translate]
+        self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_downloadvideo, self.tab_translate]
 
         # Thêm tabs vào widget
         # self.tabs.addTab(self.tab_downloadvideo1, "Download Video New")
         self.tabs.addTab(self.tab_downloadvideo, "Download Video")
         self.tabs.addTab(self.tab_tts, "Text to Speech")
         self.tabs.addTab(self.tab_translate, "Dịch Văn bản / Prompt Tùy chỉnh")
+        self.tabs.addTab(self.tab_srt, "SRT Checker")
 
     def _initialize_ui_state(self) -> None:
         """

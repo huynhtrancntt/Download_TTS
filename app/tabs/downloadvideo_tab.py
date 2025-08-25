@@ -170,9 +170,13 @@ class DownloadVideoTab(UIToolbarTab):
         for i, (display_name, lang_code) in enumerate(self.languages):
             if lang_code != "auto":  # Bỏ qua "Tự phát hiện"
                 self.language_box.addItem(display_name, userData=lang_code)
-                # Tìm tiếng Việt để đặt làm mặc định
-                if lang_code == "vi":
-                    vietnamese_index = i
+        
+        # Tìm và đặt tiếng Việt làm mặc định
+        for i in range(self.language_box.count()):
+            lang_code = self.language_box.itemData(i)
+            if lang_code == "vi":
+                vietnamese_index = i
+                break
         
         # Đặt tiếng Việt làm mặc định
         self.language_box.setCurrentIndex(vietnamese_index)
