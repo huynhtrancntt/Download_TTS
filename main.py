@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         self.tab_srt = SRTTab(self)
 
         # Lưu danh sách tất cả tabs để quản lý
-        self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_downloadvideo, self.tab_translate]
+        self._all_tabs: List[UIToolbarTab] = [self.tab_tts, self.tab_downloadvideo, self.tab_translate, self.tab_srt]
 
         # Thêm tabs vào widget
         # self.tabs.addTab(self.tab_downloadvideo1, "Download Video New")
