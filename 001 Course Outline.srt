@@ -1,0 +1,264 @@
+﻿1
+00:00:00,512 --> 00:00:01,536
+Hello and welcome back
+
+2
+00:00:01,792 --> 00:00:04,352
+Let's dive into everything this course has in store
+
+3
+00:00:05,376 --> 00:00:06,912
+Google kick things off with introduction
+
+4
+00:00:07,424 --> 00:00:11,520
+We cannot discuss why moving beyond the default selenium library is beneficial
+
+5
+00:00:12,032 --> 00:00:17,920
+Then we will explore what selenium base is and how it stands out compared to the standard selenium
+
+6
+00:00:18,688 --> 00:00:22,784
+Following that we'll see how brightest Works in tandem with selenium base
+
+7
+00:00:23,808 --> 00:00:26,880
+After laying the groundwork we will jump into setting up our envir
+
+8
+00:00:27,392 --> 00:00:30,464
+We'll start by installing Python and setting up by
+
+9
+00:00:30,976 --> 00:00:33,024
+Covering both Macos and window
+
+10
+00:00:34,048 --> 00:00:36,352
+We will discuss the importance of virtual environment
+
+11
+00:00:36,608 --> 00:00:38,912
+And get everything ready to install selenium base
+
+12
+00:00:40,192 --> 00:00:41,472
+Then comes the exciting
+
+13
+00:00:41,728 --> 00:00:43,264
+Which is writing our first
+
+14
+00:00:43,776 --> 00:00:45,568
+Will get grips with the test
+
+15
+00:00:45,824 --> 00:00:47,616
+Next understand how it operates
+
+16
+00:00:47,872 --> 00:00:49,408
+And how differs from selenium
+
+17
+00:00:49,920 --> 00:00:53,504
+Will intentionally fill a test to examine the assertions and error
+
+18
+00:00:54,528 --> 00:00:58,880
+Only on we will push a changes to GitHub which is crucial for tracking progress in your project
+
+19
+00:01:00,160 --> 00:01:02,208
+As you become a doctor crafting basic
+
+20
+00:01:02,720 --> 00:01:04,512
+Will dive into selenium base command
+
+21
+00:01:05,280 --> 00:01:09,120
+Will cover range of assertions provided by selenium bass and pee test
+
+22
+00:01:09,632 --> 00:01:11,680
+Followed by a deep dive into weight
+
+23
+00:01:12,448 --> 00:01:15,264
+Including the commonly used implicit and explicit
+
+24
+00:01:16,288 --> 00:01:19,104
+Next we'll tackle different web elements like sliders
+
+25
+00:01:19,360 --> 00:01:19,872
+Please drop
+
+26
+00:01:20,128 --> 00:01:21,920
+Is checkbox iframes and more
+
+27
+00:01:22,432 --> 00:01:24,992
+It will also learn to open an interact with new
+
+28
+00:01:26,016 --> 00:01:28,320
+From there we will discover how to upload file
+
+29
+00:01:28,832 --> 00:01:30,624
+Both individually and in batch
+
+30
+00:01:31,392 --> 00:01:34,976
+Will explore how to manage file Parts effectively for file upload
+
+31
+00:01:36,000 --> 00:01:39,584
+As we grow comfortable with testing will start building a framework
+
+32
+00:01:39,840 --> 00:01:41,376
+Beginning with the page object model
+
+33
+00:01:42,144 --> 00:01:44,704
+Converting existing test and setting up a config
+
+34
+00:01:45,216 --> 00:01:48,544
+Will also integrate winter and file formatter into a framework
+
+35
+00:01:49,568 --> 00:01:51,616
+Then we going to move on to some Advanced topics
+
+36
+00:01:52,128 --> 00:01:54,944
+That is how you can go ahead and optimize your framework
+
+37
+00:01:55,456 --> 00:01:56,992
+We will do that by using hug
+
+38
+00:01:57,248 --> 00:01:58,272
+Data driven
+
+39
+00:01:58,528 --> 00:01:59,296
+And utility
+
+40
+00:02:00,320 --> 00:02:02,624
+Will you find a test as well as a framework
+
+41
+00:02:03,136 --> 00:02:07,232
+We will also learn how to execute the selectively focusing on specific groups
+
+42
+00:02:08,000 --> 00:02:09,280
+Excluding others as needed
+
+43
+00:02:10,048 --> 00:02:13,376
+When is Spotify Advanced concept we're going to take a look at how we can
+
+44
+00:02:13,632 --> 00:02:14,400
+Play skilled the framework
+
+45
+00:02:14,912 --> 00:02:19,520
+This is where we will Embrace parallel testing cross browser testing and headless run
+
+46
+00:02:19,776 --> 00:02:20,288
+Who
+
+47
+00:02:20,544 --> 00:02:21,568
+Speed and efficiency
+
+48
+00:02:22,848 --> 00:02:24,384
+Then we're going to move on to debug
+
+49
+00:02:24,896 --> 00:02:26,688
+This is where we going to cover the Bas
+
+50
+00:02:26,944 --> 00:02:28,736
+And learn about PDP Trace mode
+
+51
+00:02:29,248 --> 00:02:32,832
+Before moving on to more Advanced Techniques such as with by John Denver
+
+52
+00:02:33,600 --> 00:02:37,440
+Then we will take a look at how to review and generate insightful reports
+
+53
+00:02:37,696 --> 00:02:40,768
+Including selenium bass Auto generated logs and dashboard
+
+54
+00:02:41,536 --> 00:02:45,376
+Additionally we will also see how we can combine Parts HTML reports
+
+55
+00:02:45,632 --> 00:02:47,168
+With the selenium is Dash
+
+56
+00:02:48,704 --> 00:02:51,520
+Singapore's final stages will integrate a
+
+57
+00:02:51,776 --> 00:02:52,544
+Cast with Seattle
+
+58
+00:02:54,336 --> 00:02:56,384
+Will set up linters and format
+
+59
+00:02:58,944 --> 00:03:00,992
+All of that as part of a CF pipal
+
+60
+00:03:01,504 --> 00:03:05,856
+Then we will bring browserstack into the mix for Crossroads the testing as well as cross device
+
+61
+00:03:06,880 --> 00:03:10,720
+And to tie all of it together we going to integrate GitHub actions with browser
+
+62
+00:03:10,976 --> 00:03:13,024
+Connect for the seamless end to end testing
+
+63
+00:03:14,048 --> 00:03:16,352
+As you can tell we have a lot to cover over here
+
+64
+00:03:17,376 --> 00:03:21,728
+But rest assured for the schools I will be here to provide personal support whenever you need it
+
+65
+00:03:22,240 --> 00:03:24,032
+Ensuring you get the most out of your
+
+66
+00:03:25,312 --> 00:03:27,616
+I hope you're excited to start this journey as I am
+

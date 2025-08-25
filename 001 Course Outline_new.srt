@@ -1,0 +1,7 @@
+﻿1
+00:00:00,512 --> 00:00:01,536
+Hello and welcome back
+
+2
+00:00:01,792 --> 00:00:04,352
+Let's dive into everything this course has in store

@@ -116,7 +116,7 @@ class AudioPlayer(QWidget):
         
         # Checkbox lặp lại
         self.chk_loop = QCheckBox("🔁 Lặp lại")
-        self.chk_loop.setChecked(True)
+        # self.chk_loop.setChecked(True)
         
         # Nút cắt audio
         self.btn_split = QPushButton("✂️")
@@ -834,9 +834,8 @@ class AudioPlayer(QWidget):
                 self.is_playing = False
                 self.btn_playpause.setText("▶️")
                 
-                if(self._check_current_global_pos()):
-                    self.play_segment(0, 0)
-                    self.stop()
+                # Khi đã tới cuối, không tự phát lại để tránh vòng lặp play/stop
+                # Giữ trạng thái dừng hẳn, để UI xử lý tiếp
         
         # Phát signal
         self.playback_state_changed.emit(self.is_playing)

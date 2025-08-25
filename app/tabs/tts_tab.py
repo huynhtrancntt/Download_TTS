@@ -1607,6 +1607,14 @@ class TTSTab(UIToolbarTab):
         # Ẩn player section
         self._show_player_section(False)
 
+    def hideEvent(self, event) -> None:
+        """Stop playback when tab is hidden (switching to another tab)."""
+        try:
+            self.stop_all()
+        except Exception as e:
+            print(f"[TTSTab] Error in hideEvent: {e}")
+        super().hideEvent(event)
+
     def closeEvent(self, event) -> None:
         """Handle tab close event"""
         try:
