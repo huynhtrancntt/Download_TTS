@@ -108,10 +108,14 @@ class SegmentManager(QObject):
 		# Debounce timer for display updates to avoid UI freeze when many segments update rapidly
 		self._update_timer: Optional[QTimer] = None
 		
-	def set_ui_components(self, list_widget: QListWidget, audio_player) -> None:
-		"""Set UI components từ TTS Tab"""
+	def set_ui_components(self, list_widget: QListWidget, audio_player, enable_context_menu: bool = True) -> None:
+		"""Set UI components từ TTS/SRT Tab"""
 		self.list_widget = list_widget
 		self.audio_player = audio_player
+		self._context_menu_enabled = bool(enable_context_menu)
+		# Track connection state to avoid redundant disconnect warnings
+		if not hasattr(self, '_ctx_connected'):
+			self._ctx_connected = False
 		self._setup_list_widget()
 		
 	def _setup_list_widget(self) -> None:
@@ -123,10 +127,23 @@ class SegmentManager(QObject):
 		self.list_widget.setAlternatingRowColors(True)
 		self.list_widget.setSelectionMode(QListWidget.ExtendedSelection)  # Cho phép chọn nhiều
 		
-		# Setup context menu
-		self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
-		self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
-		
+		# Setup context menu per flag
+		if getattr(self, '_context_menu_enabled', True):
+			self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+			# Connect only once
+			if not getattr(self, '_ctx_connected', False):
+				self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
+				self._ctx_connected = True
+		else:
+			self.list_widget.setContextMenuPolicy(Qt.NoContextMenu)
+			# Disconnect only if previously connected
+			if getattr(self, '_ctx_connected', False):
+				try:
+					self.list_widget.customContextMenuRequested.disconnect(self._show_context_menu)
+				except Exception:
+					pass
+				self._ctx_connected = False
+	
 	def add_custom_row(self, left_text: str, center_text: str, right_text: str) -> None:
 		"""Thêm custom row với 3 cột vào list widget"""
 		if not self.list_widget:

@@ -11,12 +11,13 @@ from PySide6.QtWidgets import (
 from PySide6.QtWidgets import QHeaderView
 from app.workers.translate_workers import MultiThreadTranslateWorker
 
-from PySide6.QtWidgets import QProgressBar
+from PySide6.QtCore import Qt
 
-from typing import Optional, List, Dict, Tuple
-from app.core.audio_player import AudioPlayer
-from app.workers.TTS_workers import MTProducerWorker
+from app.core.segment_audio import SegmentAudio
+
+from typing import Optional
 from app.core.segment_manager import SegmentManager
+from app.core.srt_playback_controller import SRTPlaybackController
 from app.core.language_manager import language_manager
 
 # Import history system
@@ -65,6 +66,7 @@ class SRTChecker(QWidget):
         # Ô nhập nội dung
         self.text_edit = QTextEdit()
         self.text_edit.setPlaceholderText("Dán nội dung SRT vào đây...")
+        self.text_edit.setContextMenuPolicy(Qt.NoContextMenu)
         # layout.addWidget(self.text_edit)
 
         # Nút kiểm tra
@@ -78,6 +80,7 @@ class SRTChecker(QWidget):
         self.table.setHorizontalHeaderLabels(["Thời gian", "Nội dung", "Dịch"])
         self.table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         self.table.setWordWrap(True)
+        self.table.setContextMenuPolicy(Qt.NoContextMenu)
         # Tự giãn cột nội dung và dịch theo chiều ngang, tự tính chiều cao dòng
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(
@@ -125,47 +128,46 @@ class SRTChecker(QWidget):
 
     def _initialize_state_variables(self) -> None:
         # Audio system
-        self.audio_player: Optional[AudioPlayer] = None
-        self.tts_worker: Optional[MTProducerWorker] = None
-        self.is_playing_sequence = False
         self.current_index: int = -1
         self.is_reading_audio: bool = False
+        # Throttle logging time (per second)
+        self._last_logged_second: int = -1
 
     def _setup_audio_system(self) -> None:
         """Setup audio system for text reading"""
-        # Create AudioPlayer
-        self.audio_player = AudioPlayer()
+        # Create controller which manages AudioPlayer + SegmentManager + TTS worker
+        self.controller = SRTPlaybackController(
+            list_widget=getattr(self, 'segment_list', None),
+            total_duration_label=getattr(self, 'total_duration_label', None),
+            segment_count_label=getattr(self, 'segment_count_label', None),
+        )
 
-        # Connect audio player signals
-        if self.audio_player:
-            # Bật lặp lại mặc định cho AudioPlayer
-            try:
-                if hasattr(self.audio_player, 'chk_loop'):
-                    self.audio_player.chk_loop.setChecked(True)
-            except Exception:
-                pass
+        # Expose to keep compatibility with existing code paths
+        self.audio_player = self.controller.audio_player
+        self.segment_manager = self.controller.segment_manager
 
-            self.audio_player.position_changed.connect(
-                self._on_audio_position_changed)
-            self.audio_player.segment_changed.connect(
-                self._on_audio_segment_changed)
-            self.audio_player.playback_state_changed.connect(
-                self._on_audio_playback_state_changed)
-            self.audio_player.status_signal.connect(
-                self._on_audio_status_changed)
-            # Thêm callback khi audio phát xong để tự động dừng
-            if hasattr(self.audio_player, 'playback_finished'):
-                self.audio_player.playback_finished.connect(
-                    self._on_audio_finished)
-        # Setup segment manager after audio player is created
+        # Connect controller signals to existing handlers
+        self.controller.position_changed.connect(self._on_audio_position_changed)
+        # self.controller.segment_changed.connect(self._on_audio_segment_changed)
+            # self.controller.playback_state_changed.connect(self._on_audio_playback_state_changed)
+        # self.controller.status_signal.connect(self._on_audio_status_changed)
+        # self.controller.playback_finished.connect(self._on_audio_finished)
+
+        # Setup segment manager after controller created
         self._setup_segment_manager()
 
     def _on_audio_position_changed(self, position_ms: int) -> None:
         """Callback khi vị trí audio thay đổi"""
         try:
+            # Log mỗi khi đổi giây để tránh spam
+            current_second = int(max(0, position_ms) // 1000)
+            if current_second != self._last_logged_second:
+                self._last_logged_second = current_second
+                minutes = current_second // 60
+                seconds = current_second % 60
+                self._add_log_item(f"⏱️ Thời gian phát: {minutes:02d}:{seconds:02d}", "info")
+        except Exception:
             pass
-        except Exception as e:
-            print(f"Error handling audio position change: {e}")
 
     def _on_audio_segment_changed(self, segment_index: int) -> None:
         """Callback khi segment audio thay đổi"""
@@ -221,16 +223,35 @@ class SRTChecker(QWidget):
             print(f"Error handling audio finished: {e}")
 
     def _on_segment_list_item_clicked(self, item) -> None:
-        try:
-            pass
-        except Exception as e:
-            print(f"Error on segment item click: {e}")
+        """Handle segment list item click"""
+        pass
 
     def _on_segment_list_item_double_clicked(self, item) -> None:
+        """Handle segment list item double click"""
         try:
-            pass
+            if not hasattr(self, 'segment_list') or not self.segment_list:
+                return
+            row = self.segment_list.currentRow()
+            if row is None or row < 0:
+                return
+            if not hasattr(self, 'controller') or not self.controller:
+                return
+            player = getattr(self.controller, 'audio_player', None)
+            manager = getattr(self.controller, 'segment_manager', None)
+            if not player or not manager:
+                return
+            # Validate index within available paths
+            if row >= len(manager.segment_paths):
+                return
+            path = manager.segment_paths[row]
+            if not path:
+                return
+            # Play selected segment from beginning
+            player.play_segment(row, 0)
+            self._is_playing_segments = True
+            self._add_log_item(f"🎬 Phát segment {row + 1}", "info")
         except Exception as e:
-            print(f"Error on segment item double click: {e}")
+            print(f"Error on double click play: {e}")
 
     def _create_segment_manager_section(self, content_layout: QVBoxLayout) -> None:
         """Create segment manager UI section with timing display"""
@@ -261,6 +282,7 @@ class SRTChecker(QWidget):
         self.segment_list = QListWidget()
         self.segment_list.setSelectionMode(
             QListWidget.SelectionMode.MultiSelection)
+        self.segment_list.setContextMenuPolicy(Qt.NoContextMenu)
         self.segment_list.itemClicked.connect(
             self._on_segment_list_item_clicked)
         self.segment_list.itemDoubleClicked.connect(
@@ -272,55 +294,82 @@ class SRTChecker(QWidget):
 
         self.play_segments_btn = QPushButton("▶️ Phát tất cả")
         self.play_segments_btn.clicked.connect(self._play_all_segments)
-        self.play_segments_btn.setObjectName("btn_style_1")
+        self.play_segments_btn.setObjectName("btn_style_2")
 
         self.stop_segments_btn = QPushButton("⏹️ Dừng")
         self.stop_segments_btn.clicked.connect(self._stop_segments_playback)
         self.stop_segments_btn.setObjectName("btn_style_2")
 
-        self.clear_segments_btn = QPushButton("🗑️ Xóa tất cả")
-        self.clear_segments_btn.clicked.connect(self._clear_all_segments)
-        self.clear_segments_btn.setObjectName("btn_style_2")
+        # New review button to restart from beginning
+        self.review_segments_btn = QPushButton("🔁 Xem lại từ đầu")
+        self.review_segments_btn.clicked.connect(self._review_from_start)
+        self.review_segments_btn.setObjectName("btn_style_2")
 
+        # Export audio button
+        self.export_segments_btn = QPushButton("📤 Export audio")
+        self.export_segments_btn.clicked.connect(self._export_segments_audio)
+        self.export_segments_btn.setObjectName("btn_style_2")
+
+        # Merge all button
+        self.merge_segments_btn = QPushButton("🔗 Gộp tất cả")
+        self.merge_segments_btn.clicked.connect(self._merge_all_segments)
+        self.merge_segments_btn.setObjectName("btn_style_2")
+
+        # Add buttons to controls layout
+        segment_controls.addWidget(self.play_segments_btn)
+        segment_controls.addWidget(self.stop_segments_btn)
+        segment_controls.addWidget(self.review_segments_btn)
+        segment_controls.addWidget(self.export_segments_btn)
+        segment_controls.addWidget(self.merge_segments_btn)
         segment_controls.addStretch()
+
+        # Attach controls layout to the segment manager layout
+        self.segment_manager_layout.addLayout(segment_controls)
 
         self.segment_manager_group.setLayout(self.segment_manager_layout)
         # Ẩn section mặc định khi khởi tạo
         self.segment_manager_group.setVisible(False)
         content_layout.addWidget(self.segment_manager_group)
 
-    def _play_all_segments(self) -> None:
-        try:
-            if self.audio_player:
-                self.audio_player.play()
-                self._add_log_item("▶️ Phát tất cả segments", "info")
-        except Exception as e:
-            print(f"Error play all segments: {e}")
 
     def _stop_segments_playback(self) -> None:
-        try:
-            if hasattr(self, 'audio_player') and self.audio_player:
-                self.audio_player.stop()
-        except Exception as e:
-            print(f"Error stopping segments playback: {e}")
+        """Stop segments playback"""
+        if hasattr(self, 'controller') and self.controller:
+            self.controller.stop_all()
+            # Reset playing state
+            if hasattr(self, '_is_playing_segments'):
+                self._is_playing_segments = False
+            self._add_log_item("⏹️ Đã dừng phát segments", "info")
 
-    def _clear_all_segments(self) -> None:
+    def _review_from_start(self) -> None:
+        """Restart playback from the first segment"""
         try:
-            if hasattr(self, 'segment_manager') and self.segment_manager:
-                self.segment_manager.clear_segments()
+            if hasattr(self, 'controller') and self.controller:
+                # Stop current playback and seek to start
+                self.controller.stop_all()
+                # Reset internal playing state so play can start again
+                if hasattr(self, '_is_playing_segments'):
+                    self._is_playing_segments = False
+                # Seek to 0 and play
+                if hasattr(self.controller, 'seek_to'):
+                    self.controller.seek_to(0)
+                self.controller.play()
+                self._is_playing_segments = True
+                self._add_log_item("🔁 Xem lại từ đầu", "info")
         except Exception as e:
-            print(f"Error clearing segments: {e}")
+            print(f"Error restarting from start: {e}")
+
+    def _play_all_segments(self) -> None:
+        """Play all segments from the beginning."""
+        if hasattr(self, 'controller') and self.controller:
+            self.controller.play_all()
+            self._add_log_item("▶️ Đã phát tất cả segments", "info")
 
     def stop_all_audio(self) -> None:
         """Dừng toàn bộ phát audio và TTS, reset nút trạng thái"""
         try:
-            # Stop audio playback
-            if hasattr(self, 'audio_player') and self.audio_player:
-                self.audio_player.stop()
-            # Stop TTS worker if running
-            if hasattr(self, 'tts_worker') and self.tts_worker and self.tts_worker.isRunning():
-                self.tts_worker.stop()
-                self.tts_worker.wait(3000)
+            if hasattr(self, 'controller') and self.controller:
+                self.controller.stop_all()
             # Reset UI state
             self.is_reading_audio = False
             if hasattr(self, 'btn_play_audio') and self.btn_play_audio:
@@ -334,21 +383,16 @@ class SRTChecker(QWidget):
         try:
             # Lần đầu bấm hoặc sau khi clear: Bắt đầu đọc
             if not self.is_reading_audio:
-                # Dừng audio đang phát nếu có
-                if self.audio_player:
-                    self.audio_player.stop()
-
-                # Dừng TTS worker cũ nếu đang chạy
-                if self.tts_worker and self.tts_worker.isRunning():
-                    self.tts_worker.stop()
-                    self.tts_worker.wait(3000)
+                # Dừng audio/TTS đang chạy nếu có
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.stop_all()
 
                 # Hiện section Quản lý Audio Segments
                 if hasattr(self, 'segment_manager_group'):
                     self.segment_manager_group.setVisible(True)
 
                 text_type = "source"
-                text = "Hello, how are you? This is a test text for TTS conversion."
+                text = f"Chức năng đã được sửa để:\n1. Sử dụng vị trí hiện tại của audio player để ngắt đoạn\n2. Bấm nút “✂️ Ngắt đoạn” để thực hiện\n3. Ngắt theo tùy chọn từ dropdown (3s, 4s, 5s, 10s)\n4. Giữ lại tên file cũ và thêm đoạn mới vào\n5. Vị trí ngắt đoạn được phép ở ĐẦU, CUỐI hoặc SAU segment"
 
                 # Bắt đầu đọc
                 self.is_reading_audio = True
@@ -377,21 +421,20 @@ class SRTChecker(QWidget):
                 voice_name = "vi-VN-HoaiMyNeural"  # Default Vietnamese
                 self._add_log_item("🎯 Fallback voice: Tiếng Việt (vi)", "info")
 
-                # Tạo TTS worker
-                self.tts_worker = MTProducerWorker(
-                    text, voice_name, 0, 0, 500, 4
-                )
-
-                # Kết nối signals
-                self.tts_worker.segment_ready.connect(
-                    self._on_tts_segment_ready)
-                self.tts_worker.progress.connect(self._on_tts_progress)
-                self.tts_worker.status.connect(self._on_tts_status)
-                self.tts_worker.all_done.connect(self._on_tts_complete)
-                self.tts_worker.error.connect(self._on_tts_error)
-
-                # Bắt đầu TTS
-                self.tts_worker.start()
+                # Bắt đầu TTS qua controller
+                if hasattr(self, 'controller') and self.controller:
+                    print(f"🔊 Bắt đầu đọc văn bản {text_type}: {len(text)} ký tự")
+                    self._add_log_item("🔊 Bắt đầu đọc văn bản {text_type}: {len(text)} ký tự", "info")
+                    self.controller.start_tts(
+                        text=text,
+                        voice_name=voice_name,
+                        speed=0,
+                        pitch=0,
+                        max_length=200,
+                        workers=4,
+                    )
+                    # self.controller.segment_ready.connect(self._on_tts_segment_ready)
+                    self.controller.status_signal.connect(lambda msg: self._add_log_item(msg, "info"))
 
                 # Log
                 self._add_log_item(
@@ -406,15 +449,12 @@ class SRTChecker(QWidget):
                     "background-color: #ffa500; color: white;")
 
                 # Dừng audio và TTS
-                if self.audio_player:
-                    self.audio_player.stop()
-                if self.tts_worker and self.tts_worker.isRunning():
-                    self.tts_worker.stop()
-                    self.tts_worker.wait(3000)
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.stop_all()
 
                 # Clear segments
-                if hasattr(self, 'segment_manager') and self.segment_manager:
-                    self.segment_manager.clear_segments()
+                if hasattr(self, 'controller') and self.controller:
+                    self.controller.clear_segments()
 
                 # Ẩn section Quản lý Audio Segments
                 if hasattr(self, 'segment_manager_group'):
@@ -429,67 +469,13 @@ class SRTChecker(QWidget):
         except Exception as e:
             print(f"Error playing audio from segments: {e}")
 
-    def _on_tts_segment_ready(self, path: str, duration_ms: int, index: int) -> None:
-        """Callback khi TTS segment sẵn sàng"""
-        self._ensure_capacity(index)
-        self.segment_manager.segment_paths[index - 1] = path
-        self.segment_manager.segment_durations[index - 1] = duration_ms
-
-        # Update total duration
-        self.segment_manager._update_total_duration()
-
-        # Update segments display with detailed time information
-        if hasattr(self.segment_manager, 'schedule_display_update'):
-            self.segment_manager.schedule_display_update(200)
-        else:
-            self.segment_manager._update_display()
-
-        # Cập nhật UI
-        self._update_segment_display()
-
-        # Update AudioPlayer
-        if self.audio_player:
-            valid_paths, valid_durations = self.segment_manager.get_valid_segments()
-            self.audio_player.add_segments(valid_paths, valid_durations)
-
-            # Hiện player section khi có segment đầu tiên
-            if index == 1:
-                self._show_player_section(True)
-
-        # Auto-play tất cả segments tuần tự, phát xong thì dừng (không loop)
-        if self.current_index < 0 and self.segment_manager.segment_paths and self.segment_manager.segment_paths[0]:
-            if self.audio_player:
-                # Không can thiệp loop tại đây; AudioPlayer tự quản lý chk_loop nội bộ
-
-                self.audio_player.play()
-                self._add_log_item(
-                    f"▶️ Tự động phát tất cả segments: {len(self.segment_manager.segment_paths)} segments (không loop)", "blue")
-                # Set current_index để tránh auto-play lại
-                self.current_index = 0
-
-    def _on_tts_progress(self, emitted: int, total: int) -> None:
-        """Callback cho tiến trình TTS"""
-        progress = int((emitted / total) * 100) if total > 0 else 0
-        self._add_log_item(f"🔄 TTS: {progress}% ({emitted}/{total})", "info")
-
-    def _on_tts_status(self, msg: str) -> None:
-        """Callback cho status TTS"""
-        self._add_log_item(f"ℹ️ TTS: {msg}", "info")
-
-    def _on_tts_complete(self) -> None:
-        """Callback khi TTS hoàn thành"""
-        self._add_log_item("✅ TTS hoàn thành", "info")
-
-    def _on_tts_error(self, msg: str) -> None:
-        """Callback khi TTS có lỗi"""
-        self._add_log_item(f"❌ Lỗi TTS: {msg}", "error")
 
     def _setup_segment_manager(self) -> None:
         """Setup segment manager with UI components"""
         try:
             if hasattr(self, 'segment_manager') and self.segment_manager:
                 self.segment_manager.set_ui_components(
-                    self.segment_list, self.audio_player)
+                    self.segment_list, self.audio_player, enable_context_menu=False)
 
                 # Connect segment manager signals
                 self.segment_manager.segments_changed.connect(
@@ -508,54 +494,16 @@ class SRTChecker(QWidget):
                 f"❌ Lỗi khi thiết lập segment manager: {e}", "error")
 
     def _update_segment_display(self) -> None:
-        """Update segment display information"""
+        """Update segment display information via helper"""
         try:
-            if hasattr(self, 'segment_manager') and self.segment_manager:
-                stats = self.segment_manager.get_segments_statistics()
-
-                # Update segment count in the group box title
-                if hasattr(self, 'segment_manager_group'):
-                    self.segment_manager_group.setTitle(
-                        f"🎵 Quản lý Audio Segments ({stats['total_segments']} segments)")
-
-                # Update timing labels
-                if stats['total_duration'] > 0:
-                    total_seconds = stats['total_duration'] / 1000
-
-                    # Tính giờ, phút, giây
-                    hours = int(total_seconds // 3600)
-                    minutes = int((total_seconds % 3600) // 60)
-                    seconds = int(total_seconds % 60)
-
-                    # Format thời gian
-                    if hours > 0:
-                        total_duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
-                    else:
-                        total_duration_str = f"{minutes:02d}:{seconds:02d}"
-
-                    self.total_duration_label.setText(
-                        f"Tổng thời lượng: {total_duration_str}")
-                else:
-                    self.total_duration_label.setText("Tổng thời lượng: 00:00")
-
-                self.segment_count_label.setText(
-                    f"Số segments: {stats['total_segments']}")
-
+            manager = getattr(self, 'segment_manager', None)
+            SegmentAudio.update_segment_display(
+                manager,
+                getattr(self, 'total_duration_label', None),
+                getattr(self, 'segment_count_label', None),
+            )
         except Exception as e:
             print(f"Error updating segment display: {e}")
-            # Fallback display
-            try:
-                if hasattr(self, 'total_duration_label'):
-                    self.total_duration_label.setText("Tổng thời lượng: 00:00")
-                if hasattr(self, 'total_duration_label'):
-                    self.total_duration_label.setText("Tổng thời lượng: 00:00")
-                if hasattr(self, 'segment_count_label'):
-                    self.segment_count_label.setText("Số segments: 0")
-                if hasattr(self, 'segment_manager_group'):
-                    self.segment_manager_group.setTitle(
-                        "🎵 Quản lý Audio Segments (0 segments)")
-            except Exception as fallback_error:
-                print(f"Fallback display error: {fallback_error}")
 
     def _on_segment_added(self, path: str, duration: int) -> None:
         """Handle when a new segment is added"""
@@ -910,40 +858,116 @@ class SRTChecker(QWidget):
 
     def _ensure_capacity(self, n: int) -> None:
         """Đảm bảo segment_paths và segment_durations có đủ capacity cho n segments"""
-        try:
-            if not hasattr(self, 'segment_manager') or not self.segment_manager:
-                return
-
-            while len(self.segment_manager.segment_paths) < n:
-                self.segment_manager.segment_paths.append(None)
-                self.segment_manager.segment_durations.append(None)
-        except Exception as e:
-            print(f"Error ensuring capacity: {e}")
+        # Handled by controller now
+        pass
 
     def _add_log_item(self, message: str, level: str = "") -> None:
         """Add log item to console"""
         try:
             print(f"[{level.upper() if level else 'INFO'}] {message}")
+            
+            parent_main = getattr(self, 'parent_main', None)
+            if parent_main and hasattr(parent_main, '_add_log_item'):
+                parent_main._add_log_item(message, level)
         except Exception as e:
             print(f"[LOG ERROR] {e}")
 
     def _update_progress(self, value: int) -> None:
         """Update progress bar (placeholder)"""
-        try:
-            print(f"[PROGRESS] {value}%")
-        except Exception as e:
-            print(f"[PROGRESS ERROR] {e}")
+        pass
 
     def _show_player_section(self, show: bool = True) -> None:
         """Show/hide player section"""
         if hasattr(self, 'segment_manager_group'):
             self.segment_manager_group.setVisible(show)
 
+    def _export_segments_audio(self) -> None:
+        """Export all available segment audio files to a chosen folder in order."""
+        try:
+            if not hasattr(self, 'controller') or not self.controller:
+                QMessageBox.warning(self, "Export audio", "Chưa có controller để lấy danh sách segments.")
+                return
+            manager = getattr(self.controller, 'segment_manager', None)
+            if not manager or not getattr(manager, 'segment_paths', None):
+                QMessageBox.information(self, "Export audio", "Không có segment nào để xuất.")
+                return
+
+            # Chọn thư mục đích
+            folder = QFileDialog.getExistingDirectory(self, "Chọn thư mục để lưu audio")
+            if not folder:
+                return
+
+            exported, total = SegmentAudio.export_all_to_folder(manager, folder)
+            QMessageBox.information(self, "Export audio", f"✅ Đã xuất {exported}/{total} file vào:\n{folder}")
+            self._add_log_item(f"📤 Exported {exported}/{total} segments to {folder}", "info")
+        except Exception as e:
+            QMessageBox.warning(self, "Export audio", f"Lỗi: {e}")
+            print(f"Export segments error: {e}")
+
+    def _merge_all_segments(self) -> None:
+        """Merge all valid segments into a single MP3 and replace the list with the merged file."""
+        try:
+            if not hasattr(self, 'controller') or not self.controller:
+                QMessageBox.warning(self, "Gộp audio", "Chưa có controller để lấy danh sách segments.")
+                return
+            manager = getattr(self.controller, 'segment_manager', None)
+            player = getattr(self.controller, 'audio_player', None)
+            if not manager or not getattr(manager, 'segment_paths', None):
+                QMessageBox.information(self, "Gộp audio", "Không có segment nào để gộp.")
+                return
+
+            parts = [p for p in manager.segment_paths if p]
+            if not parts:
+                QMessageBox.information(self, "Gộp audio", "Không có file audio hợp lệ để gộp.")
+                return
+
+            # Chọn nơi lưu file gộp
+            default_name = f"SRT_Merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+            out_path, _ = QFileDialog.getSaveFileName(
+                self, "Chọn nơi lưu file gộp", str(AppConfig.OUTPUT_DIR / default_name), "MP3 Files (*.mp3)"
+            )
+            if not out_path:
+                return
+
+            # Ghép các đoạn qua exporter
+            out_path, total_ms, merged = SegmentAudio.merge_all_to_file(manager, out_path, gap_ms=0)
+            if not out_path or total_ms is None:
+                QMessageBox.warning(self, "Gộp thất bại", "Không có dữ liệu hợp lệ để gộp.")
+                return
+
+            # Thay danh sách segments bằng file gộp
+            manager.clear_segments()
+            manager.add_segment(out_path, total_ms)
+
+            # Đồng bộ player
+            if player:
+                valid_paths, valid_durations = manager.get_valid_segments()
+                player.add_segments(valid_paths, valid_durations)
+                # Hiện section nếu đang ẩn
+                if hasattr(self, 'segment_manager_group'):
+                    self.segment_manager_group.setVisible(True)
+
+            # Refresh stats display
+            try:
+                SegmentAudio.update_segment_display(
+                    manager,
+                    getattr(self, 'segment_manager_group', None),
+                    getattr(self, 'total_duration_label', None),
+                    getattr(self, 'segment_count_label', None),
+                )
+            except Exception:
+                pass
+
+            QMessageBox.information(self, "Thành công", f"Đã gộp {merged} đoạn vào 1 file:\n{out_path}")
+            self._add_log_item(f"🔗 Đã gộp {merged} segments thành 1 file", "info")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi gộp", f"Không thể gộp segments:\n{e}")
+            print(f"Merge segments error: {e}")
+
 
 class SRTTab(UIToolbarTab):
     def __init__(self, parent_main: QWidget) -> None:
         super().__init__(parent_main)
-
         # Initialize state variables
         self._initialize_state_variables()
 
@@ -969,12 +993,10 @@ class SRTTab(UIToolbarTab):
         # Setup content section
         self._setup_content_section(root_layout)
 
-        # Update status bar
-        if getattr(self.parent_main, "status", None):
-            self.parent_main.status.showMessage(
-                "SRT Tab sẵn sàng - Chức năng kiểm tra, chỉnh sửa và dịch SRT")
+        # Update status b
+        # ar
 
-    def _setup_header_section(self, root_layout: QVBoxLayout) -> None:
+    def _setup_header_section(self, parent_main: QVBoxLayout) -> None:
         """Setup header section"""
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(2, 2, 2, 2)
@@ -985,7 +1007,7 @@ class SRTTab(UIToolbarTab):
         self._create_control_buttons_row(row_layout)
 
         header_layout.addLayout(row_layout)
-        root_layout.addLayout(header_layout)
+        parent_main.addLayout(header_layout)
 
     def _create_control_buttons_row(self, parent_layout: QVBoxLayout) -> None:
         """Create control buttons row"""
@@ -1001,16 +1023,20 @@ class SRTTab(UIToolbarTab):
 
         parent_layout.addLayout(row2_layout)
 
-    def _setup_content_section(self, root_layout: QVBoxLayout) -> None:
+    def _setup_content_section(self, parent_main: QVBoxLayout) -> None:
         """Setup content section"""
         content_layout = QVBoxLayout()
         content_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create SRTChecker widget
         self.viewer = SRTChecker()
+        try:
+            self.viewer.parent_main = self.parent_main
+        except Exception:
+            pass
         content_layout.addWidget(self.viewer)
 
-        root_layout.addLayout(content_layout)
+        parent_main.addLayout(content_layout)
 
     def _setup_history_system(self) -> None:
         """Setup history system with auto-refresh"""
@@ -1209,3 +1235,5 @@ class SRTTab(UIToolbarTab):
         except Exception:
             pass
         super().closeEvent(event)
+
+    

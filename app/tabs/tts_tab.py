@@ -316,13 +316,15 @@ class TTSTab(UIToolbarTab):
         self.btn_say = QPushButton("🔊 Chuyển đổi")
         self.btn_save = QPushButton("💾 Lưu")
         self.btn_info = QPushButton("ℹ️ Info")
+        self.btn_merge_all = QPushButton("🔗 Gộp tất cả")
 
         # Connect buttons for row 1
         self.btn_info.clicked.connect(self._print_segments_info)
         self.btn_save.clicked.connect(self.on_export_mp3)
+        self.btn_merge_all.clicked.connect(self.on_merge_all_segments)
 
         # Apply style to buttons in row 1
-        for btn in (self.btn_say, self.btn_save, self.btn_info):
+        for btn in (self.btn_say, self.btn_save, self.btn_info, self.btn_merge_all):
             btn.setStyleSheet(AppConfig.BUTTON_STYLE)
             btn.setMinimumWidth(80)
             btn.setMaximumWidth(120)
@@ -467,7 +469,7 @@ class TTSTab(UIToolbarTab):
 
         # Setup SegmentManager with UI components
         self.segment_manager.set_ui_components(
-            self.list_segments, self.audio_player)
+            self.list_segments, self.audio_player, enable_context_menu=True)
 
         # Connect SegmentManager context menu signals
         self.segment_manager.show_segment_info.connect(
@@ -1801,3 +1803,57 @@ class TTSTab(UIToolbarTab):
         except Exception as e:
             print(f"[TTSTab] Error loading history: {e}")
             return []
+
+    def on_merge_all_segments(self) -> None:
+        """Merge all valid segments into a single file and replace the list with the merged result."""
+        parts = [p for p in self.segment_manager.segment_paths if p]
+        if not parts:
+            QMessageBox.information(self, "Chưa có dữ liệu", "Chưa có đoạn nào để gộp.")
+            return
+        # Choose save location
+        default_name = f"Merged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+        out_path, _ = QFileDialog.getSaveFileName(
+            self, "Chọn nơi lưu file gộp", str(AppConfig.OUTPUT_DIR / default_name), "MP3 Files (*.mp3)"
+        )
+        if not out_path:
+            return
+        try:
+            prepare_pydub_ffmpeg()
+            gap_ms = self.gap_spin_edge_tts.value() if hasattr(self, 'gap_spin_edge_tts') else 0
+            final = AudioSegment.silent(duration=0)
+            valid_count = 0
+            for i, p in enumerate(parts):
+                try:
+                    seg = AudioSegment.from_file(p)
+                    final += seg
+                    # Optional gap between segments (skip after last)
+                    if i < len(parts) - 1 and gap_ms > 0:
+                        # Avoid double gap if next is a gap segment
+                        next_path = parts[i + 1] if i + 1 < len(parts) else None
+                        if not (next_path and "gap_" in next_path):
+                            final += AudioSegment.silent(duration=gap_ms)
+                    valid_count += 1
+                except Exception as e:
+                    print(f"Warning: Could not process segment {p}: {e}")
+                    continue
+            if valid_count == 0:
+                QMessageBox.warning(self, "Gộp thất bại", "Không có dữ liệu hợp lệ để gộp.")
+                return
+            # Export merged file
+            final.export(out_path, format="mp3")
+            # Compute duration
+            total_ms = get_mp3_duration_ms(out_path)
+            # Replace segments with single merged
+            self.segment_manager.clear_segments()
+            self.segment_manager.add_segment(out_path, total_ms)
+            # Resync player
+            if self.audio_player:
+                valid_paths, valid_durations = self.segment_manager.get_valid_segments()
+                self.audio_player.add_segments(valid_paths, valid_durations)
+                self._show_player_section(True)
+            QMessageBox.information(self, "Thành công", f"Đã gộp {valid_count} đoạn vào 1 file:\n{out_path}")
+            self._add_log_item(f"🔗 Đã gộp {valid_count} segments thành 1 file ({ms_to_mmss(total_ms)})", "info")
+        except Exception as e:
+            error_msg = f"Không thể gộp segments:\n{e}"
+            QMessageBox.critical(self, "Lỗi gộp", error_msg)
+            self._add_log_item(f"❌ Lỗi gộp segments: {e}", "error")
